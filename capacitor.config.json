@@ -1,0 +1,6 @@
+{
+  "appId": "com.juntopress.blackjack",
+  "appName": "Blackjack Pro",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

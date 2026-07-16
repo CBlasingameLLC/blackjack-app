@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.vercel/
+ios/
+android/
+.DS_Store

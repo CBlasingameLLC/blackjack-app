@@ -1,0 +1,232 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <title>Blackjack Pro — Advantage Play Trainer</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="description" content="6-deck S17 blackjack simulator with Hi-Lo counting, basic strategy grading, and Illustrious 18 deviation training." />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/blackjack.css" />
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/icons/blackjack-icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/blackjack-icon-192.png">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Blackjack Pro">
+    <meta name="theme-color" content="#071c12">
+
+    <style>
+        :root {
+            --accent-color: #f1c40f;
+            --font-serif: 'Playfair Display', serif;
+            --text-muted: #888888;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            background-color: #0b2b1d;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="boot-splash" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #071c12; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999999; transition: opacity 0.5s ease-out, visibility 0.5s ease-out;">
+        <i class="icon solid fa-layer-group" style="font-size: 5em; color: #f1c40f; margin-bottom: 20px; text-shadow: 0 4px 15px rgba(0,0,0,0.5);"></i>
+        <h1 style="font-family: var(--font-serif); color: white; margin: 0; font-size: 2em; letter-spacing: 1px;">Blackjack Pro</h1>
+        <div style="margin-top: 30px; width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #f1c40f; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    </div>
+
+    <div id="main-menu">
+        <div style="text-align: center; margin-bottom: 3em;">
+            <i class="icon solid fa-layer-group" style="font-size: 4em; color: var(--accent-color); margin-bottom: 0.2em;"></i>
+            <h1 style="font-family: var(--font-serif); font-size: 2.5em; margin: 0; border: none; color: white;">Blackjack Pro</h1>
+            <p style="color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; font-size: 0.8em;">Advantage Play Simulator</p>
+        </div>
+
+        <button id="btn-mode-testout" class="menu-btn">Test Out Mode</button>
+        <button id="btn-mode-hard" class="menu-btn">Hard Totals Drill</button>
+        <button id="btn-mode-pairs" class="menu-btn">Pairs Drill</button>
+        <button id="btn-mode-soft" class="menu-btn">Soft Totals Drill</button>
+        <button id="btn-mode-deviations" class="menu-btn">Deviations Drill</button>
+        <button id="btn-mode-surrender" class="menu-btn">Surrender Drill</button>
+        <button id="btn-open-reference" class="menu-btn" style="margin-top: 2em; border-color: #8e44ad;">Strategy Library</button>
+        <button id="btn-open-stats" class="menu-btn" aria-label="Lifetime Stats" style="border-color: #2ecc71;">Lifetime Stats</button>
+    </div>
+
+    <div id="reference-modal">
+        <button id="btn-close-reference" class="close-modal" style="color: #ffffff;" aria-label="Close Strategy Library">&times;</button>
+        <h2 style="color: #f1c40f; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.5em; margin-top: 0;">Strategy Library</h2>
+
+        <h3 style="margin-top: 1.5em; color: #ffffff;">The Rules of the Table</h3>
+        <ul style="color: #e0e0e0; font-size: 0.9em; line-height: 1.6;">
+            <li><strong>Decks:</strong> 6</li>
+            <li><strong>Dealer:</strong> Stands on Soft 17 (S17)</li>
+            <li><strong>Double After Split:</strong> Allowed (DAS)</li>
+            <li><strong>Late Surrender:</strong> Allowed</li>
+            <li><strong>Blackjack Pays:</strong> 3:2</li>
+        </ul>
+
+        <h3 style="margin-top: 1.5em; color: #2ecc71;">Hi-Lo Counting System</h3>
+        <p style="color: #e0e0e0; font-size: 0.9em; line-height: 1.6;">
+            <strong>+1:</strong> 2, 3, 4, 5, 6<br>
+            <strong> 0:</strong> 7, 8, 9<br>
+            <strong>-1:</strong> 10, J, Q, K, A<br><br>
+            <em>True Count = Running Count ÷ Decks Remaining</em>
+        </p>
+
+        <div id="reference-modal-body"></div>
+    </div>
+
+    <div id="stats-modal">
+        <button id="btn-close-stats" class="close-modal" style="color: #ffffff;" aria-label="Close Lifetime Stats">&times;</button>
+        <h2>Lifetime Stats</h2>
+        <div id="stats-modal-body"></div>
+    </div>
+
+    <div id="blackjack-container" style="display: none; flex-direction: column; height: 100dvh; width: 100vw; position: relative; overflow: hidden; box-sizing: border-box;">
+
+        <div style="position: absolute; top: 0; left: 0; width: 100%; padding: 1em; display: flex; justify-content: space-between; align-items: flex-start; z-index: 50; pointer-events: none;">
+
+            <div style="pointer-events: auto; display: flex; flex-direction: column; gap: 0.5em;">
+                <button id="btn-return-menu" aria-label="Return to menu" style="background: transparent; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); border: none; font-size: 1.2em; padding: 0; box-shadow: none; font-weight: bold; cursor: pointer;"><i class="icon solid fa-chevron-left"></i> Menu</button>
+                <div id="session-stats" style="display: none; background: rgba(0,0,0,0.6); padding: 0.3em 0.8em; border-radius: 20px; font-family: monospace; font-size: 0.85em; color: var(--accent-color); border: 1px solid rgba(255,255,255,0.1);">Accuracy: --</div>
+            </div>
+
+            <div style="pointer-events: auto; display: flex; gap: 1.2em;">
+                <button id="btn-settings" aria-label="Settings" style="background: transparent; border: none; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 1.2em; padding: 0; box-shadow: none; cursor: pointer;"><i class="icon solid fa-cog"></i></button>
+                <button id="btn-fullscreen" aria-label="Toggle fullscreen" style="background: transparent; border: none; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 1.2em; padding: 0; box-shadow: none; cursor: pointer;"><i class="icon solid fa-expand"></i></button>
+            </div>
+        </div>
+
+        <div id="settings-menu" style="display: none; position: absolute; top: 50px; right: 3em; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1.2em; z-index: 250; box-shadow: 0 10px 25px rgba(0,0,0,0.5); font-size: 0.9em;">
+
+            <div style="font-size: 0.8em; color: var(--accent-color); text-transform: uppercase; margin-bottom: 0.8em; font-weight: bold;">Display & Pace</div>
+            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
+                <input type="checkbox" id="toggle-casual"> Casual Mode (No AP Grader)
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
+                <input type="checkbox" id="toggle-bankroll"> Freeplay (Infinite Bankroll)
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
+                <input type="checkbox" id="toggle-totals"> Hide Hand Totals
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
+                <input type="checkbox" id="toggle-banner"> Disable Victory Banner
+            </label>
+            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
+                <input type="checkbox" id="toggle-sound"> Enable Audio
+            </label>
+
+            <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
+                Game Speed:
+                <select id="config-speed">
+                    <option value="1200">Slow</option>
+                    <option value="800" selected>Normal</option>
+                    <option value="300">Fast</option>
+                    <option value="0">Instant</option>
+                </select>
+            </label>
+
+            <div style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.2);">
+                <div style="font-size: 0.8em; color: var(--accent-color); text-transform: uppercase; margin-bottom: 0.8em; font-weight: bold;">Table Rules</div>
+                <p style="color: rgba(255,255,255,0.6); font-size: 0.85em; margin: 0;">6 Decks &middot; S17 &middot; DAS &middot; Late Surrender &middot; 75% Penetration (fixed)</p>
+            </div>
+        </div>
+
+        <div id="game-message" class="hidden" role="status" aria-live="polite">
+            Message
+        </div>
+
+        <div id="ap-feedback" role="status" aria-live="polite">Basic Strategy Error</div>
+
+        <div id="dealer-zone" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 4em; position: relative;">
+            <div id="dealer-score" style="background: var(--accent-color); padding: 0.2em 0.8em; border-radius: 20px; font-size: 0.8em; font-weight: bold; margin-bottom: 1em; opacity: 0; z-index: 5;">0</div>
+            <div id="dealer-cards"></div>
+        </div>
+
+        <div class="felt-text">
+            <h2>Blackjack Pays 3 to 2</h2>
+            <p>Dealer must draw to 16, and stand on all 17s</p>
+        </div>
+
+        <div id="player-zone" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 2em; position: relative; z-index: 5;">
+
+            <div id="table-bet-area" style="display: none; position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); align-items: center; justify-content: center; width: 100px; height: 100px;">
+
+                <div id="insurance-bet-area" style="position: absolute; top: -40px; font-size: 0.75em; color: #f1c40f; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 5px; display: none; width: 220px; text-align: center;">
+                    Insurance Pays 2:1
+                    <div id="insurance-chip-stack" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); height: 0;"></div>
+                </div>
+
+                <div style="width: 80px; height: 80px; border: 3px solid rgba(255,255,255,0.2); border-radius: 50%; position: absolute; z-index: 1;"></div>
+                <div id="chip-stack" style="position: relative; z-index: 2; width: 40px; height: 40px;"></div>
+
+                <div id="table-bet-bubble" class="table-bet-bubble">$0</div>
+            </div>
+
+            <div id="player-score" style="background: var(--accent-color); padding: 0.2em 0.8em; border-radius: 20px; font-size: 0.8em; font-weight: bold; margin-bottom: 0.5em; opacity: 0;">0</div>
+            <div id="player-cards" class="hand-cards">
+                <div style="width: 85px; height: 120px; border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px;"></div>
+            </div>
+        </div>
+
+        <div id="action-dashboard" style="flex: 0 0 auto; background: #071c12; padding: 1.5em 1em; border-top: 2px solid rgba(255,255,255,0.1); box-shadow: 0 -10px 20px rgba(0,0,0,0.3);">
+
+            <div id="insurance-controls" style="display: none; gap: 0.5em; justify-content: center; margin-bottom: 1em;">
+                <button id="btn-buy-insurance" class="button" style="background: #8e44ad; color: white; border: none; box-shadow: none; flex: 1;">Buy Insurance</button>
+                <button id="btn-pass-insurance" class="button" style="background: #7f8c8d; color: white; border: none; box-shadow: none; flex: 1;">Pass</button>
+            </div>
+
+            <div id="game-controls" style="display: none; gap: 0.5em; justify-content: center; margin-bottom: 1em;">
+                <button id="btn-hit" class="button" style="background: #27ae60; color: white; border: none; box-shadow: none; flex: 1;">Hit</button>
+                <button id="btn-stand" class="button" style="background: #e74c3c; color: white; border: none; box-shadow: none; flex: 1;">Stand</button>
+                <button id="btn-double" class="button" style="background: #f39c12; color: white; border: none; box-shadow: none; flex: 1;">Double</button>
+                <button id="btn-split" class="button" style="background: #3498db; color: white; border: none; box-shadow: none; flex: 1;">Split</button>
+                <button id="btn-surrender" class="button" style="background: #7f2020; color: white; border: none; box-shadow: none; flex: 1;">Surrender</button>
+            </div>
+
+            <div id="bet-controls" style="display: flex; gap: 0.8em; justify-content: center; margin-bottom: 1em; align-items: center;">
+                <div id="chip-container" style="display: flex; gap: 0.8em; align-items: center;">
+                    <div class="chip red">$5</div>
+                    <div class="chip green">$25</div>
+                    <div class="chip black">$100</div>
+                    <div class="chip purple">$500</div>
+                </div>
+                <button id="btn-deal" class="button primary" style="margin-left: 1em; height: 50px; padding: 0 2em;">Deal</button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 0.9em; color: rgba(255,255,255,0.7);">
+                <div>BANKROLL: <span id="ui-bankroll" style="color: #2ecc71; font-weight: bold;">$10,000</span></div>
+                <div>BET: <span id="ui-bet" style="color: white; font-weight: bold;">$0</span></div>
+                <div>TC: <span id="ui-truecount" style="color: #f1c40f; font-weight: bold;">0</span></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script defer src="/js/blackjack/rules.js"></script>
+    <script defer src="/js/blackjack/shoe.js"></script>
+    <script defer src="/js/blackjack/hand.js"></script>
+    <script defer src="/js/blackjack/strategy-data.js"></script>
+    <script defer src="/js/blackjack/count.js"></script>
+    <script defer src="/js/blackjack/strategy-engine.js"></script>
+    <script defer src="/js/blackjack/persistence.js"></script>
+    <script defer src="/js/blackjack/game-manager.js"></script>
+    <script defer src="/js/blackjack/audio.js"></script>
+    <script defer src="/js/blackjack/render.js"></script>
+    <script defer src="/js/blackjack/ui-bindings.js"></script>
+    <script defer src="/js/blackjack/reference-render.js"></script>
+    <script defer src="/js/blackjack/stats-render.js"></script>
+    <script defer src="/js/blackjack/boot.js"></script>
+</body>
+</html>

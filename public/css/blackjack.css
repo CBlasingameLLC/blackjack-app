@@ -1,0 +1,774 @@
+/* ==========================================================================
+   BLACKJACK PRO — game-only stylesheet
+   Extracted from custom.css:1228-1759 (Phase D, plan §4.1). Loaded only on
+   /games/blackjack/ via blackjack.html's `extra_css` front-matter variable,
+   read by _includes/app.html — see that file for the include mechanism.
+
+   During extraction, the duplicated "V1 -> OVERRIDE" rule pairs the plan
+   identified (.menu-btn, .table-bet-bubble x3, .felt-text, #reference-modal's
+   !important block) were merged into single clean rules carrying only the
+   FINAL cascade-resolved values, with `!important` dropped wherever it was
+   only there to fight an earlier conflicting rule that no longer exists
+   after the merge. `.strategy-table` (the old hand-authored reference
+   tables) is dropped entirely — nothing outside blackjack.html referenced
+   it, and blackjack.html no longer does either (replaced by the data-driven
+   `.reference-table` component below). `.card-hidden`/`.split-container`
+   are kept as harmless unused leftovers for rollback parity with keeping
+   the old blackjack.js in place.
+   ========================================================================== */
+
+/* =========================================
+   NATIVE CSS CARDS
+   ========================================= */
+
+.playing-card {
+    width: 85px;
+    height: 120px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    padding: 6px;
+    box-sizing: border-box;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-weight: bold;
+    position: relative;
+    user-select: none;
+    perspective: 1000px; /* gives .card-inner's rotateY some depth */
+}
+
+/* Card Colors */
+.playing-card.red .card-front { color: #e74c3c; }
+.playing-card.black .card-front { color: #222222; }
+
+/* --- Two-sided card structure (front face / back face), so the dealer
+   hole card can 3D-flip via rotateY on .card-inner (plan §4.2, render.js's
+   _buildCardEl). Only transform/opacity are animated — no layout thrash. --- */
+.card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.card-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+    padding: 6px;
+}
+
+.card-front {
+    background: #ffffff;
+}
+
+.card-back {
+    background: #800000;
+    background-image: radial-gradient(#b31b1b 15%, transparent 16%), radial-gradient(#b31b1b 15%, transparent 16%);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    border: 3px solid #ffffff;
+    box-sizing: border-box;
+    transform: rotateY(180deg);
+}
+
+/* Face-down cards start rotated so the back face is what's visible;
+   removing .face-down (render.js's onHoleCardRevealed) flips it to front. */
+.playing-card.face-down .card-inner {
+    transform: rotateY(180deg);
+}
+
+/* Card Corner Labels */
+.card-top { font-size: 1.1em; line-height: 1; text-align: left; }
+.card-bottom { font-size: 1.1em; line-height: 1; text-align: right; transform: rotate(180deg); }
+
+/* Giant Center Suit */
+.card-middle {
+    font-size: 3em;
+    text-align: center;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.8;
+}
+
+/* Legacy hole-card look — unused now that .card-back covers this, kept as a
+   harmless leftover (see file header). */
+.card-hidden {
+    background: #800000;
+    background-image: radial-gradient(#b31b1b 15%, transparent 16%), radial-gradient(#b31b1b 15%, transparent 16%);
+    background-size: 20px 20px;
+    background-position: 0 0, 10px 10px;
+    border: 3px solid #ffffff;
+}
+.card-hidden * { display: none; }
+
+/* --- Deal-in animation: staggered by --deal-index (render.js's
+   _dealCardIn sets the property before insertion, then adds .dealt a full
+   paint later so the transition has a "before" state). transform/opacity
+   only, GPU-compositable on older iOS Safari (plan §4.2). --- */
+.playing-card {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.85);
+    transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.35s ease;
+    transition-delay: calc(var(--deal-index, 0) * 100ms);
+}
+
+.playing-card.dealt {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+/* Once dealt, the sideways/doubled-card transform takes over instead of the
+   deal-in transform (still transform-only). */
+.playing-card.dealt.sideways {
+    transform: rotate(90deg) translateY(20px);
+    transform-origin: center center;
+    z-index: 0;
+}
+
+/* =========================================
+   AP FEEDBACK TOAST
+   ========================================= */
+
+#ap-feedback {
+    position: absolute;
+    top: -60px; /* Hidden off-screen */
+    left: 50%;
+    transform: translateX(-50%);
+    background: #e74c3c;
+    color: white;
+    padding: 0.8em 1.5em;
+    border-radius: 30px;
+    font-weight: bold;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    transition: top 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 1000;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+#ap-feedback.show {
+    top: 60px; /* Drops down below the exit bar */
+}
+
+/* =========================================
+   MESSAGE BANNER — opacity/visibility fade, not display swap (bug #12 /
+   plan §4.2). render.js toggles .visible/.hidden only; base rule keeps it
+   laid out (so the fade can animate) but non-interactive while hidden.
+   ========================================= */
+
+#game-message {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.85);
+    color: #ffffff;
+    padding: 1em 2em;
+    border-radius: 8px;
+    font-weight: 900;
+    font-size: 1.8em;
+    z-index: 100;
+    text-align: center;
+    border: 2px solid var(--accent-color);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+
+#game-message.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0s linear 0s;
+}
+
+#game-message.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* =========================================
+   SPLIT HAND LAYOUT / HAND COLUMNS
+   ========================================= */
+
+.split-container {
+    display: flex;
+    gap: 1.5em;
+    width: 100%;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.hand-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+/* Dims and shrinks the hand you are not currently playing */
+.hand-column.inactive {
+    opacity: 0.4;
+    transform: scale(0.85) translateY(-10px);
+    pointer-events: none;
+}
+
+.hand-column.active {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+/* New hand-column enter animation (a split just happened) — transform/
+   opacity only. */
+.hand-column.entering {
+    opacity: 0;
+    transform: scale(0.7) translateY(20px);
+}
+
+.hand-column.entered {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+/* Overlapping Cards */
+.hand-cards {
+    display: flex;
+    flex-direction: row;
+    height: 120px;
+    padding-left: 10px; /* Buffer for the first card */
+}
+
+/* Forces every card AFTER the first one to slide left and overlap */
+.hand-cards .playing-card:not(:first-child) {
+    margin-left: -55px;
+    box-shadow: -4px 4px 10px rgba(0,0,0,0.3);
+}
+
+.hand-score-badge {
+    background: var(--accent-color);
+    padding: 0.2em 0.8em;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-bottom: 0.5em;
+    color: #000000;
+}
+
+/* Win/loss/push pulse — color + transform/opacity only (plan §4.2: no
+   box-shadow animation for iOS Safari perf; a static box-shadow is fine,
+   animating one is not). render.js adds the class and removes it on
+   animationend. */
+.hand-score-badge.winner {
+    animation: badgePulseWin 1.8s ease-out;
+}
+.hand-score-badge.loser {
+    animation: badgePulseLoss 1.8s ease-out;
+}
+.hand-score-badge.push {
+    animation: badgePulsePush 1.8s ease-out;
+}
+
+@keyframes badgePulseWin {
+    0% { color: #000000; transform: scale(1); }
+    20% { color: #2ecc71; transform: scale(1.25); }
+    100% { color: #000000; transform: scale(1); }
+}
+@keyframes badgePulseLoss {
+    0% { color: #000000; transform: scale(1); }
+    20% { color: #e74c3c; transform: scale(1.25); }
+    100% { color: #000000; transform: scale(1); }
+}
+@keyframes badgePulsePush {
+    0% { color: #000000; transform: scale(1); }
+    20% { color: #f1c40f; transform: scale(1.15); }
+    100% { color: #000000; transform: scale(1); }
+}
+
+/* =========================================
+   CHIPS & BET UI
+   ========================================= */
+
+.chip {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 1.1em;
+    color: white;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4), inset 0 0 0 4px rgba(255,255,255,0.2), inset 0 0 0 6px rgba(0,0,0,0.4);
+    border: 4px dashed rgba(255,255,255,0.8);
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    user-select: none;
+}
+
+.chip:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 0 0 4px rgba(255,255,255,0.2), inset 0 0 0 6px rgba(0,0,0,0.4);
+}
+
+/* Chip Denominations */
+.chip.red { background-color: #e74c3c; }    /* $5 */
+.chip.green { background-color: #2ecc71; }  /* $25 */
+.chip.black { background-color: #2c3e50; }  /* $100 */
+.chip.purple { background-color: #8e44ad; } /* $500 */
+
+#table-bet-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    width: 100px;
+    height: 100px;
+    cursor: pointer;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+#chip-stack {
+    display: flex;
+    flex-direction: column-reverse; /* Stacks chips upward */
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* Merged from the 3 duplicated "V1 -> OVERRIDE" .table-bet-bubble
+   definitions — final cascade-resolved values only (see file header). */
+.table-bet-bubble {
+    background: rgba(0,0,0,0.85);
+    border: 2px solid #f1c40f;
+    color: #f1c40f;
+    padding: 0.3em 0.8em;
+    border-radius: 20px;
+    font-weight: 900;
+    font-family: monospace;
+    font-size: 0.9em;
+    position: absolute;
+    top: 50%;
+    left: 110%;
+    bottom: auto;
+    height: max-content;
+    line-height: 1;
+    transform: translateY(-50%);
+    z-index: 10;
+    white-space: nowrap;
+    width: max-content;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.thrown-chip {
+    width: 40px; height: 40px;
+    font-size: 0.7em;
+    position: absolute; /* Allows them to stack on top of each other */
+    top: 0; left: 0;
+    box-shadow: 2px 4px 6px rgba(0,0,0,0.6);
+    animation: throwChip 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes throwChip {
+    0% { transform: translate(0, 150px) scale(1.5); opacity: 0; }
+    /* Uses dynamic variables set by JS for random scattering */
+    100% { transform: translate(var(--x, 0), var(--y, 0)) rotate(var(--rot, 0deg)) scale(1); opacity: 1; }
+}
+
+/* =========================================
+   ROUTING & MENUS
+   ========================================= */
+
+#main-menu {
+    position: absolute;
+    top: 0; left: 0; width: 100vw; height: 100dvh;
+    background: rgba(11, 43, 29, 0.95);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    transition: opacity 0.3s ease;
+}
+
+/* Merged from the 2 duplicated "V1 -> OVERRIDE" .menu-btn definitions —
+   final cascade-resolved values only (see file header). */
+.menu-btn {
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    border: 2px solid rgba(255,255,255,0.1);
+    color: #ffffff;
+    font-family: 'Inter', sans-serif;
+    font-size: 1.1em;
+    font-weight: 800;
+    padding: 1.2em 2em;
+    margin: 0.5em 0;
+    width: 85%;
+    max-width: 320px;
+    border-radius: 30px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 6px 15px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+.menu-btn:hover, .menu-btn:active {
+    background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+/* Strategy Library button stays distinctly Ruby Red */
+#btn-open-reference {
+    background: linear-gradient(135deg, #4b134f 0%, #c94b4b 100%);
+    margin-top: 2em;
+}
+
+.close-modal {
+    position: absolute;
+    top: 10px; right: 15px;
+    font-size: 2em;
+    color: rgba(255,255,255,0.5);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+}
+
+/* Enhancing the Top Bar Text */
+#btn-return-menu, #btn-settings, #btn-fullscreen, #btn-open-stats {
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    font-weight: bold;
+}
+
+/* =========================================
+   SETTINGS MENU
+   ========================================= */
+
+#settings-menu {
+    background: #111111;
+    color: #ffffff;
+    border: 1px solid rgba(255,255,255,0.2);
+    min-width: 280px;
+}
+
+#settings-menu label {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    color: #ffffff;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Merged checkbox visibility fixes — a single clean rule, no !important
+   needed since there's nothing left in this file to fight. */
+#settings-menu input[type="checkbox"] {
+    -webkit-appearance: auto;
+    appearance: auto;
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin: 0 12px 0 0;
+    accent-color: var(--accent-color);
+    cursor: pointer;
+    opacity: 1;
+    visibility: visible;
+}
+
+#settings-menu select {
+    background: #222;
+    color: white;
+    border: 1px solid var(--accent-color);
+    padding: 4px;
+    border-radius: 4px;
+    outline: none;
+}
+
+/* =========================================
+   REFERENCE MODAL (Strategy Library) — data-driven, rendered by
+   reference-render.js into #reference-modal-body.
+   ========================================= */
+
+/* Merged from the base #reference-modal rule + its later !important
+   override block — one clean rule, final cascade-resolved values. */
+#reference-modal {
+    display: none;
+    position: absolute;
+    top: 5%; left: 5%; width: 90%; height: 90%;
+    background: #111111;
+    border: 2px solid var(--accent-color);
+    border-radius: 12px;
+    z-index: 300;
+    overflow-y: auto;
+    padding: 2em 1.5em;
+    box-sizing: border-box;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    color: #ffffff;
+}
+
+#reference-modal h2, #reference-modal h3 {
+    color: var(--accent-color);
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+#reference-modal p,
+#reference-modal ul,
+#reference-modal li {
+    font-size: 0.95em;
+}
+
+#reference-modal p,
+#reference-modal ul,
+#reference-modal li,
+#reference-modal em,
+#reference-modal strong {
+    color: #ffffff;
+}
+
+.reference-table-wrapper {
+    overflow-x: auto;
+    margin-bottom: 2em;
+}
+
+.reference-table-title {
+    margin-top: 2em;
+    color: #f1c40f;
+}
+
+.reference-table {
+    width: 100%;
+    min-width: 500px;
+    border-collapse: collapse;
+    margin-top: 1em;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85em;
+    background: #111111;
+    color: #ffffff;
+}
+
+.reference-table th,
+.reference-table td {
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 0.5em;
+    text-align: center;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.reference-table th {
+    background: #222222;
+    color: var(--accent-color);
+}
+
+.reference-row-label {
+    background: #1a1a1a;
+    text-align: left;
+    padding-left: 0.8em;
+}
+
+/* Action-code color legend — distinct, casino-consistent hues.
+   H = neutral blue, S = green, D/Ds = gold/amber, P = purple, R = red,
+   buy (insurance) = orange. */
+.action-H  { background-color: #3498db; color: #ffffff; }
+.action-S  { background-color: #27ae60; color: #ffffff; }
+.action-D  { background-color: #f1c40f; color: #1a1a1a; }
+.action-Ds { background-color: #f39c12; color: #1a1a1a; }
+.action-P  { background-color: #8e44ad; color: #ffffff; }
+.action-R  { background-color: #e74c3c; color: #ffffff; }
+.action-buy { background-color: #e67e22; color: #ffffff; }
+
+.reference-table-surrender .reference-row-label,
+.reference-table-deviations td:first-child {
+    text-align: left;
+}
+
+/* =========================================
+   STATS MODAL — mirrors #reference-modal's show/hide pattern (plan §3.4),
+   rendered by stats-render.js into #stats-modal-body.
+   ========================================= */
+
+#stats-modal {
+    display: none;
+    position: absolute;
+    top: 5%; left: 5%; width: 90%; height: 90%;
+    background: #111111;
+    border: 2px solid var(--accent-color);
+    border-radius: 12px;
+    z-index: 300;
+    overflow-y: auto;
+    padding: 2em 1.5em;
+    box-sizing: border-box;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+    color: #ffffff;
+}
+
+#stats-modal h2 {
+    color: var(--accent-color);
+    font-weight: 800;
+    letter-spacing: 1px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+    padding-bottom: 0.5em;
+    margin-top: 0;
+}
+
+.stats-section {
+    margin-bottom: 2em;
+}
+
+.stats-section-title {
+    color: #f1c40f;
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+}
+
+.stats-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5em 0.2em;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    font-family: monospace;
+    font-size: 0.95em;
+}
+
+.stats-row-label {
+    color: #e0e0e0;
+}
+
+.stats-row-value {
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+.stats-mistake-list {
+    max-height: 320px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6em;
+}
+
+.stats-mistake-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em;
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 0.6em 0.8em;
+    font-size: 0.85em;
+}
+
+.stats-mistake-time { color: rgba(255,255,255,0.5); }
+.stats-mistake-mode { color: #8e44ad; font-weight: bold; }
+.stats-mistake-hand { color: #ffffff; }
+.stats-mistake-tc { color: #f1c40f; }
+.stats-mistake-you { color: #e74c3c; }
+.stats-mistake-correct { color: #2ecc71; }
+.stats-mistake-empty { color: rgba(255,255,255,0.5); font-style: italic; }
+
+.stats-clear-history-btn {
+    margin-top: 1.5em;
+    background: #e74c3c;
+    color: #ffffff;
+    border: none;
+    border-radius: 20px;
+    padding: 0.6em 1.5em;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+/* =========================================
+   TABLE / DEALER LAYOUT
+   ========================================= */
+
+#dealer-cards {
+    display: flex;
+    flex-direction: row;
+    height: 120px;
+    padding-left: 10px;
+}
+#dealer-cards .playing-card:not(:first-child) {
+    margin-left: -55px;
+    box-shadow: -4px 4px 10px rgba(0,0,0,0.3);
+}
+
+/* Merged .felt-text V1 + OVERRIDE — final gold-watermark values. */
+.felt-text {
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: rgba(241, 196, 15, 0.35);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    font-family: 'Times New Roman', serif;
+    text-transform: uppercase;
+    pointer-events: none;
+    user-select: none;
+    width: 100%;
+}
+.felt-text h2 { margin: 0; font-size: 2.2em; letter-spacing: 3px; font-weight: normal; }
+.felt-text p { margin: 5px 0 0 0; font-size: 0.8em; letter-spacing: 1px; font-weight: bold; }
+
+/* =========================================
+   CONTAINER / VIEWPORT / STATE MACHINE
+   ========================================= */
+
+#blackjack-container {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw;
+    height: 100%; /* not 100dvh — avoids iOS address-bar reflow stretching */
+    display: flex;
+    flex-direction: column;
+}
+
+/* State classes render.js applies to #blackjack-container (mirrored by
+   [data-state]) — no state currently needs container-level visual styling
+   beyond what the per-element rules above already handle, but the hooks
+   exist for any future per-state overrides without touching JS. */
+#blackjack-container.state-idle,
+#blackjack-container.state-betting,
+#blackjack-container.state-dealing,
+#blackjack-container.state-player-turn,
+#blackjack-container.state-insurance,
+#blackjack-container.state-dealer-turn,
+#blackjack-container.state-resolving {
+    /* intentionally empty state hooks */
+}
+
+#action-dashboard {
+    flex: 0 0 auto;
+    padding-bottom: max(1.5em, env(safe-area-inset-bottom));
+}
+
+/* Bug #12 fix: buttons are now gated via the native `disabled` attribute
+   (ui-bindings.js's setDisabled), not inline style.opacity/pointerEvents. */
+#action-dashboard button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
