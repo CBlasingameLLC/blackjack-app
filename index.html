@@ -15,142 +15,213 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Blackjack Pro">
-    <meta name="theme-color" content="#071c12">
-
-    <style>
-        :root {
-            --accent-color: #f1c40f;
-            --font-serif: 'Playfair Display', serif;
-            --text-muted: #888888;
-        }
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh;
-            overflow: hidden;
-            background-color: #0b2b1d;
-            color: #ffffff;
-            font-family: 'Inter', sans-serif;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+    <meta name="theme-color" content="#0a0a0c">
 </head>
 <body>
-    <div id="boot-splash" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #071c12; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999999; transition: opacity 0.5s ease-out, visibility 0.5s ease-out;">
-        <i class="icon solid fa-layer-group" style="font-size: 5em; color: #f1c40f; margin-bottom: 20px; text-shadow: 0 4px 15px rgba(0,0,0,0.5);"></i>
-        <h1 style="font-family: var(--font-serif); color: white; margin: 0; font-size: 2em; letter-spacing: 1px;">Blackjack Pro</h1>
-        <div style="margin-top: 30px; width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #f1c40f; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+    <!-- Boot splash -->
+    <div id="boot-splash" class="boot-splash">
+        <h1 class="boot-splash__title">Blackjack<em>Pro</em></h1>
+        <div class="boot-splash__spinner"></div>
     </div>
 
-    <div id="main-menu">
-        <div style="text-align: center; margin-bottom: 3em;">
-            <i class="icon solid fa-layer-group" style="font-size: 4em; color: var(--accent-color); margin-bottom: 0.2em;"></i>
-            <h1 style="font-family: var(--font-serif); font-size: 2.5em; margin: 0; border: none; color: white;">Blackjack Pro</h1>
-            <p style="color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; font-size: 0.8em;">Advantage Play Simulator</p>
-        </div>
+    <!-- ===================== HUB =====================
+         #main-menu keeps its id (ui-bindings.js / game-manager show+hide it
+         by that id). Mode tiles keep the existing #btn-mode-* ids so the
+         bindings built at ui-bindings.js load time still find them — hub.js
+         only owns tab state, never game logic. -->
+    <div id="main-menu" class="hub">
 
-        <button id="btn-mode-testout" class="menu-btn">Test Out Mode</button>
-        <button id="btn-mode-hard" class="menu-btn">Hard Totals Drill</button>
-        <button id="btn-mode-pairs" class="menu-btn">Pairs Drill</button>
-        <button id="btn-mode-soft" class="menu-btn">Soft Totals Drill</button>
-        <button id="btn-mode-deviations" class="menu-btn">Deviations Drill</button>
-        <button id="btn-mode-surrender" class="menu-btn">Surrender Drill</button>
-        <button id="btn-open-reference" class="menu-btn" style="margin-top: 2em; border-color: #8e44ad;">Strategy Library</button>
-        <button id="btn-open-stats" class="menu-btn" aria-label="Lifetime Stats" style="border-color: #2ecc71;">Lifetime Stats</button>
-    </div>
+        <header class="hub__top">
+            <span class="hub__wordmark">Blackjack<em>Pro</em></span>
+        </header>
 
-    <div id="reference-modal">
-        <button id="btn-close-reference" class="close-modal" style="color: #ffffff;" aria-label="Close Strategy Library">&times;</button>
-        <h2 style="color: #f1c40f; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.5em; margin-top: 0;">Strategy Library</h2>
+        <main class="hub__body">
 
-        <h3 style="margin-top: 1.5em; color: #ffffff;">The Rules of the Table</h3>
-        <ul style="color: #e0e0e0; font-size: 0.9em; line-height: 1.6;">
-            <li><strong>Decks:</strong> 6</li>
-            <li><strong>Dealer:</strong> Stands on Soft 17 (S17)</li>
-            <li><strong>Double After Split:</strong> Allowed (DAS)</li>
-            <li><strong>Late Surrender:</strong> Allowed</li>
-            <li><strong>Blackjack Pays:</strong> 3:2</li>
-        </ul>
+            <!-- DRILLS -->
+            <section class="hub-panel active" data-panel="drills">
+                <div class="option-row">
+                    <span class="option-row__label">Drill style</span>
+                    <div class="segmented" id="drill-style-toggle" role="group" aria-label="Drill style">
+                        <button class="seg active" data-style="flash" type="button">Flash</button>
+                        <button class="seg" data-style="full" type="button">Full hands</button>
+                    </div>
+                </div>
+                <div class="tile-grid">
+                    <button id="btn-mode-hard" class="tile tile--hard">
+                        <span class="tile__glyph"><i class="icon solid fa-hashtag"></i></span>
+                        <span class="tile__name">Hard Totals</span>
+                        <span class="tile__sub">Basic strategy</span>
+                    </button>
+                    <button id="btn-mode-soft" class="tile tile--soft">
+                        <span class="tile__glyph"><i class="icon solid fa-feather"></i></span>
+                        <span class="tile__name">Soft Totals</span>
+                        <span class="tile__sub">Ace hands</span>
+                    </button>
+                    <button id="btn-mode-pairs" class="tile tile--pairs">
+                        <span class="tile__glyph"><i class="icon solid fa-clone"></i></span>
+                        <span class="tile__name">Pairs</span>
+                        <span class="tile__sub">Split decisions</span>
+                    </button>
+                    <button id="btn-mode-deviations" class="tile tile--dev">
+                        <span class="tile__glyph"><i class="icon solid fa-code-branch"></i></span>
+                        <span class="tile__name">Deviations</span>
+                        <span class="tile__sub">Illustrious 18</span>
+                    </button>
+                    <button id="btn-mode-surrender" class="tile tile--surr">
+                        <span class="tile__glyph"><i class="icon solid fa-flag"></i></span>
+                        <span class="tile__name">Surrender</span>
+                        <span class="tile__sub">Fab 4 indices</span>
+                    </button>
+                    <button id="btn-mode-targeted" class="tile tile--targeted" type="button">
+                        <span class="tile__glyph"><i class="icon solid fa-crosshairs"></i></span>
+                        <span class="tile__name">Targeted</span>
+                        <span class="tile__sub">Your weak spots</span>
+                    </button>
+                </div>
+            </section>
 
-        <h3 style="margin-top: 1.5em; color: #2ecc71;">Hi-Lo Counting System</h3>
-        <p style="color: #e0e0e0; font-size: 0.9em; line-height: 1.6;">
-            <strong>+1:</strong> 2, 3, 4, 5, 6<br>
-            <strong> 0:</strong> 7, 8, 9<br>
-            <strong>-1:</strong> 10, J, Q, K, A<br><br>
-            <em>True Count = Running Count ÷ Decks Remaining</em>
-        </p>
+            <!-- COUNT -->
+            <section class="hub-panel" data-panel="count">
+                <div class="tile-grid tile-grid--short">
+                    <button id="btn-drill-speed" class="tile tile--speed" type="button">
+                        <span class="tile__glyph"><i class="icon solid fa-bolt"></i></span>
+                        <span class="tile__name">Speed Count</span>
+                        <span class="tile__sub">Count N cards, fast</span>
+                    </button>
+                    <button id="btn-drill-estimation" class="tile tile--estim" type="button">
+                        <span class="tile__glyph"><i class="icon solid fa-ruler-vertical"></i></span>
+                        <span class="tile__name">Deck Estimation</span>
+                        <span class="tile__sub">Read the discard tray</span>
+                    </button>
+                </div>
 
-        <div id="reference-modal-body"></div>
-    </div>
+                <!-- Count Checks is a way of PLAYING, not a separate screen —
+                     so it configures the graded Play session rather than
+                     being a tile that launches something. -->
+                <div class="config-card">
+                    <h4 class="config-card__title"><i class="icon solid fa-stopwatch"></i> Count Checks during Play</h4>
+                    <p class="config-card__note">Get quizzed mid-session. <strong>True</strong> also hides the TC readout, so you must estimate the decks yourself.</p>
+                    <div class="option-row">
+                        <span class="option-row__label">Ask for</span>
+                        <div class="segmented" id="count-prompt-toggle" role="group" aria-label="Count check type">
+                            <button class="seg active" data-prompt="off" type="button">Off</button>
+                            <button class="seg" data-prompt="running" type="button">Running</button>
+                            <button class="seg" data-prompt="true" type="button">True</button>
+                        </div>
+                    </div>
+                    <div class="option-row">
+                        <span class="option-row__label">Every</span>
+                        <select id="count-interval" aria-label="Hands between count checks">
+                            <option value="2">2 hands</option>
+                            <option value="3" selected>3 hands</option>
+                            <option value="5">5 hands</option>
+                            <option value="8">8 hands</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
 
-    <div id="stats-modal">
-        <button id="btn-close-stats" class="close-modal" style="color: #ffffff;" aria-label="Close Lifetime Stats">&times;</button>
-        <h2>Lifetime Stats</h2>
-        <div id="stats-modal-body"></div>
-    </div>
+            <!-- CHARTS (rendered by hub.js via BJ.ReferenceRender) -->
+            <section class="hub-panel" data-panel="charts">
+                <div id="hub-charts-body" class="hub-fill"></div>
+            </section>
 
-    <div id="blackjack-container" style="display: none; flex-direction: column; height: 100dvh; width: 100vw; position: relative; overflow: hidden; box-sizing: border-box;">
+            <!-- STATS (rendered by hub.js via BJ.StatsRender) -->
+            <section class="hub-panel" data-panel="stats">
+                <div id="hub-stats-body" class="hub-scroll"></div>
+            </section>
 
-        <div style="position: absolute; top: 0; left: 0; width: 100%; padding: 1em; display: flex; justify-content: space-between; align-items: flex-start; z-index: 50; pointer-events: none;">
+            <!-- SETTINGS (same ids ui-bindings.js already wires) -->
+            <section class="hub-panel" data-panel="settings">
+                <div class="hub-scroll settings-panel">
+                    <div class="settings-heading">Display &amp; Pace</div>
+                    <label class="settings-row"><input type="checkbox" id="toggle-bankroll"> Freeplay (Infinite Bankroll)</label>
+                    <label class="settings-row"><input type="checkbox" id="toggle-totals"> Hide Hand Totals</label>
+                    <label class="settings-row"><input type="checkbox" id="toggle-banner"> Disable Victory Banner</label>
+                    <label class="settings-row"><input type="checkbox" id="toggle-sound"> Enable Audio</label>
 
-            <div style="pointer-events: auto; display: flex; flex-direction: column; gap: 0.5em;">
-                <button id="btn-return-menu" aria-label="Return to menu" style="background: transparent; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); border: none; font-size: 1.2em; padding: 0; box-shadow: none; font-weight: bold; cursor: pointer;"><i class="icon solid fa-chevron-left"></i> Menu</button>
-                <div id="session-stats" style="display: none; background: rgba(0,0,0,0.6); padding: 0.3em 0.8em; border-radius: 20px; font-family: monospace; font-size: 0.85em; color: var(--accent-color); border: 1px solid rgba(255,255,255,0.1);">Accuracy: --</div>
+                    <label class="settings-row settings-select-row">
+                        Game Speed
+                        <select id="config-speed">
+                            <option value="1200">Slow</option>
+                            <option value="800" selected>Normal</option>
+                            <option value="300">Fast</option>
+                            <option value="0">Instant</option>
+                        </select>
+                    </label>
+
+                    <div class="settings-divider">
+                        <div class="settings-heading">Table Rules</div>
+                        <p class="settings-rules-note">6 Decks &middot; S17 &middot; DAS &middot; Late Surrender &middot; 75% Penetration (fixed)</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Persistent, prominent Play CTA. #btn-mode-testout reuses the
+             existing binding -> gm.setGameMode('testout'). -->
+        <div class="hub__cta">
+            <div class="segmented" id="play-mode-toggle" role="group" aria-label="Play mode">
+                <button class="seg active" data-casual="false" type="button">Graded</button>
+                <button class="seg" data-casual="true" type="button">Casual</button>
             </div>
+            <button id="btn-mode-testout" class="button button--primary hub__play">Play Blackjack</button>
+        </div>
 
-            <div style="pointer-events: auto; display: flex; gap: 1.2em;">
-                <button id="btn-settings" aria-label="Settings" style="background: transparent; border: none; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 1.2em; padding: 0; box-shadow: none; cursor: pointer;"><i class="icon solid fa-cog"></i></button>
-                <button id="btn-fullscreen" aria-label="Toggle fullscreen" style="background: transparent; border: none; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 1.2em; padding: 0; box-shadow: none; cursor: pointer;"><i class="icon solid fa-expand"></i></button>
+        <nav class="hub__nav" aria-label="Sections">
+            <button class="hub-tab active" data-tab="drills" type="button"><i class="icon solid fa-graduation-cap"></i><span>Drills</span></button>
+            <button class="hub-tab" data-tab="count" type="button"><i class="icon solid fa-calculator"></i><span>Count</span></button>
+            <button class="hub-tab" data-tab="charts" type="button"><i class="icon solid fa-th"></i><span>Charts</span></button>
+            <button class="hub-tab" data-tab="stats" type="button"><i class="icon solid fa-chart-line"></i><span>Stats</span></button>
+            <button class="hub-tab" data-tab="settings" type="button"><i class="icon solid fa-sliders-h"></i><span>Settings</span></button>
+        </nav>
+    </div>
+
+    <!-- Strategy Library modal — in-game chart access (opened from the table
+         top bar). Body rendered by reference-render.js at boot. -->
+    <div id="reference-modal" class="modal-sheet">
+        <button id="btn-close-reference" class="close-modal" aria-label="Close Strategy Library">&times;</button>
+        <h2>Strategy Library</h2>
+        <div id="reference-modal-body" class="modal-fill"></div>
+    </div>
+
+    <!-- ===================== TABLE ===================== -->
+    <div id="blackjack-container">
+
+        <div class="topbar">
+            <div class="topbar__group topbar__group--left">
+                <button id="btn-return-menu" class="text-btn" aria-label="Return to menu"><i class="icon solid fa-chevron-left"></i> Menu</button>
+                <div id="session-stats" class="accuracy-pill" style="display:none;">Accuracy: --</div>
+            </div>
+            <div class="topbar__group">
+                <button id="btn-open-reference" class="icon-btn" aria-label="Strategy Library"><i class="icon solid fa-th"></i></button>
+                <button id="btn-settings" class="icon-btn" aria-label="Settings"><i class="icon solid fa-sliders-h"></i></button>
+                <button id="btn-fullscreen" class="icon-btn" aria-label="Toggle fullscreen"><i class="icon solid fa-expand"></i></button>
             </div>
         </div>
 
-        <div id="settings-menu" style="display: none; position: absolute; top: 50px; right: 3em; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 1.2em; z-index: 250; box-shadow: 0 10px 25px rgba(0,0,0,0.5); font-size: 0.9em;">
-
-            <div style="font-size: 0.8em; color: var(--accent-color); text-transform: uppercase; margin-bottom: 0.8em; font-weight: bold;">Display & Pace</div>
-            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
-                <input type="checkbox" id="toggle-casual"> Casual Mode (No AP Grader)
-            </label>
-            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
-                <input type="checkbox" id="toggle-bankroll"> Freeplay (Infinite Bankroll)
-            </label>
-            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
-                <input type="checkbox" id="toggle-totals"> Hide Hand Totals
-            </label>
-            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
-                <input type="checkbox" id="toggle-banner"> Disable Victory Banner
-            </label>
-            <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 1em; cursor: pointer;">
-                <input type="checkbox" id="toggle-sound"> Enable Audio
-            </label>
-
-            <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1em;">
-                Game Speed:
-                <select id="config-speed">
-                    <option value="1200">Slow</option>
-                    <option value="800" selected>Normal</option>
-                    <option value="300">Fast</option>
-                    <option value="0">Instant</option>
-                </select>
-            </label>
-
-            <div style="margin-top: 1.5em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.2);">
-                <div style="font-size: 0.8em; color: var(--accent-color); text-transform: uppercase; margin-bottom: 0.8em; font-weight: bold;">Table Rules</div>
-                <p style="color: rgba(255,255,255,0.6); font-size: 0.85em; margin: 0;">6 Decks &middot; S17 &middot; DAS &middot; Late Surrender &middot; 75% Penetration (fixed)</p>
-            </div>
-        </div>
-
-        <div id="game-message" class="hidden" role="status" aria-live="polite">
-            Message
-        </div>
-
+        <div id="game-message" class="hidden" role="status" aria-live="polite">Message</div>
         <div id="ap-feedback" role="status" aria-live="polite">Basic Strategy Error</div>
 
-        <div id="dealer-zone" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding-top: 4em; position: relative;">
-            <div id="dealer-score" style="background: var(--accent-color); padding: 0.2em 0.8em; border-radius: 20px; font-size: 0.8em; font-weight: bold; margin-bottom: 1em; opacity: 0; z-index: 5;">0</div>
+        <!-- Periodic count quiz (state 'count-check') -->
+        <div id="count-prompt" class="count-prompt">
+            <h3 id="count-prompt-title" class="count-prompt__title">What is the RUNNING count?</h3>
+            <div class="count-prompt__row">
+                <input id="count-prompt-input" class="cd-input" type="number" inputmode="numeric" aria-label="Your count">
+                <button id="count-prompt-submit" class="button button--primary" type="button">Check</button>
+            </div>
+        </div>
+
+        <!-- Discard tray — the deck-estimation aid. Deliberately a plain
+             visual stack with no number on it: it exists to be eyeballed. -->
+        <div class="discard-tray-wrap">
+            <div id="discard-tray" class="discard-tray"><div class="discard-tray__fill"></div></div>
+            <span class="discard-tray__label">Discards</span>
+        </div>
+
+        <div id="dealer-zone" class="zone zone--dealer">
+            <div id="dealer-score" class="score-badge">0</div>
             <div id="dealer-cards"></div>
         </div>
 
@@ -159,60 +230,99 @@
             <p>Dealer must draw to 16, and stand on all 17s</p>
         </div>
 
-        <div id="player-zone" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 2em; position: relative; z-index: 5;">
+        <div id="player-zone" class="zone zone--player">
 
-            <div id="table-bet-area" style="display: none; position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); align-items: center; justify-content: center; width: 100px; height: 100px;">
-
-                <div id="insurance-bet-area" style="position: absolute; top: -40px; font-size: 0.75em; color: #f1c40f; text-transform: uppercase; letter-spacing: 2px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 5px; display: none; width: 220px; text-align: center;">
+            <div id="table-bet-area">
+                <div id="insurance-bet-area">
                     Insurance Pays 2:1
-                    <div id="insurance-chip-stack" style="position: absolute; top: 15px; left: 50%; transform: translateX(-50%); height: 0;"></div>
+                    <div id="insurance-chip-stack"></div>
                 </div>
-
-                <div style="width: 80px; height: 80px; border: 3px solid rgba(255,255,255,0.2); border-radius: 50%; position: absolute; z-index: 1;"></div>
-                <div id="chip-stack" style="position: relative; z-index: 2; width: 40px; height: 40px;"></div>
-
+                <div class="bet-spot-ring"></div>
+                <div id="chip-stack"></div>
                 <div id="table-bet-bubble" class="table-bet-bubble">$0</div>
             </div>
 
-            <div id="player-score" style="background: var(--accent-color); padding: 0.2em 0.8em; border-radius: 20px; font-size: 0.8em; font-weight: bold; margin-bottom: 0.5em; opacity: 0;">0</div>
-            <div id="player-cards" class="hand-cards">
-                <div style="width: 85px; height: 120px; border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px;"></div>
-            </div>
+            <div id="player-score" class="score-badge">0</div>
+            <div id="player-cards" class="hand-cards"></div>
         </div>
 
-        <div id="action-dashboard" style="flex: 0 0 auto; background: #071c12; padding: 1.5em 1em; border-top: 2px solid rgba(255,255,255,0.1); box-shadow: 0 -10px 20px rgba(0,0,0,0.3);">
+        <div id="action-dashboard" class="dashboard">
 
-            <div id="insurance-controls" style="display: none; gap: 0.5em; justify-content: center; margin-bottom: 1em;">
-                <button id="btn-buy-insurance" class="button" style="background: #8e44ad; color: white; border: none; box-shadow: none; flex: 1;">Buy Insurance</button>
-                <button id="btn-pass-insurance" class="button" style="background: #7f8c8d; color: white; border: none; box-shadow: none; flex: 1;">Pass</button>
+            <div id="insurance-controls" class="action-row">
+                <button id="btn-buy-insurance" class="button">Buy Insurance</button>
+                <button id="btn-pass-insurance" class="button">Pass</button>
             </div>
 
-            <div id="game-controls" style="display: none; gap: 0.5em; justify-content: center; margin-bottom: 1em;">
-                <button id="btn-hit" class="button" style="background: #27ae60; color: white; border: none; box-shadow: none; flex: 1;">Hit</button>
-                <button id="btn-stand" class="button" style="background: #e74c3c; color: white; border: none; box-shadow: none; flex: 1;">Stand</button>
-                <button id="btn-double" class="button" style="background: #f39c12; color: white; border: none; box-shadow: none; flex: 1;">Double</button>
-                <button id="btn-split" class="button" style="background: #3498db; color: white; border: none; box-shadow: none; flex: 1;">Split</button>
-                <button id="btn-surrender" class="button" style="background: #7f2020; color: white; border: none; box-shadow: none; flex: 1;">Surrender</button>
+            <div id="game-controls" class="action-grid" data-display-mode="grid">
+                <button id="btn-hit" class="button">Hit</button>
+                <button id="btn-stand" class="button">Stand</button>
+                <div class="secondary-actions">
+                    <button id="btn-double" class="button">Double</button>
+                    <button id="btn-split" class="button">Split</button>
+                    <button id="btn-surrender" class="button">Surrender</button>
+                </div>
             </div>
 
-            <div id="bet-controls" style="display: flex; gap: 0.8em; justify-content: center; margin-bottom: 1em; align-items: center;">
-                <div id="chip-container" style="display: flex; gap: 0.8em; align-items: center;">
+            <div id="bet-controls" class="bet-row">
+                <div id="chip-container" class="chips">
                     <div class="chip red">$5</div>
                     <div class="chip green">$25</div>
                     <div class="chip black">$100</div>
                     <div class="chip purple">$500</div>
                 </div>
-                <button id="btn-deal" class="button primary" style="margin-left: 1em; height: 50px; padding: 0 2em;">Deal</button>
+                <button id="btn-deal" class="button button--primary">Deal</button>
             </div>
 
-            <div style="display: flex; justify-content: space-between; font-family: monospace; font-size: 0.9em; color: rgba(255,255,255,0.7);">
-                <div>BANKROLL: <span id="ui-bankroll" style="color: #2ecc71; font-weight: bold;">$10,000</span></div>
-                <div>BET: <span id="ui-bet" style="color: white; font-weight: bold;">$0</span></div>
-                <div>TC: <span id="ui-truecount" style="color: #f1c40f; font-weight: bold;">0</span></div>
+            <div class="readouts">
+                <div class="readout"><span class="readout__label">BANKROLL</span> <span id="ui-bankroll" class="readout__value readout__value--bankroll">$10,000</span></div>
+                <div class="readout" id="ui-bet-wrap"><span class="readout__label">BET</span> <span id="ui-bet" class="readout__value">$0</span></div>
+                <div class="readout"><span class="readout__label">TC</span> <span id="ui-truecount" class="readout__value readout__value--tc">0</span></div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ============ COUNT DRILL SCREEN (Speed Count / Deck Estimation) ============
+         Its own view: no dealer, no hands, no bets. Driven by count-drills.js. -->
+    <div id="count-drill-container">
+        <div class="topbar">
+            <div class="topbar__group topbar__group--left">
+                <button id="cd-back" class="text-btn" aria-label="Back to menu"><i class="icon solid fa-chevron-left"></i> Menu</button>
+            </div>
+            <div class="topbar__group">
+                <span id="cd-title" class="cd-title">Speed Count</span>
             </div>
         </div>
 
+        <div class="cd-stage">
+            <div id="cd-card-slot" class="cd-card-slot"></div>
+            <div id="cd-progress" class="cd-progress"></div>
+            <div class="discard-tray-wrap discard-tray-wrap--drill">
+                <div id="cd-tray" class="discard-tray"><div class="discard-tray__fill"></div></div>
+                <span class="discard-tray__label">Discards</span>
+            </div>
+        </div>
+
+        <div id="cd-panel" class="cd-panel"></div>
     </div>
+
+    <!-- Desktop companion rail (hidden on phone; shown >=900px) -->
+    <aside id="desktop-rail">
+        <div>
+            <h3 class="rail-title">Companion</h3>
+            <p class="rail-sub">Extra training surface for the big screen. More tools are on the way.</p>
+        </div>
+        <div class="rail-card">
+            <h4><i class="icon solid fa-clone"></i> Multi-Hand Counting</h4>
+            <p>Practice keeping the running count across several simultaneous hands.</p>
+            <span class="rail-card__soon">Coming soon</span>
+        </div>
+        <div class="rail-card">
+            <h4><i class="icon solid fa-th-large"></i> Multi-Hand Play</h4>
+            <p>Play multiple spots at once, just like a real table.</p>
+            <span class="rail-card__soon">Coming soon</span>
+        </div>
+    </aside>
 
     <script defer src="/js/blackjack/rules.js"></script>
     <script defer src="/js/blackjack/shoe.js"></script>
@@ -228,5 +338,9 @@
     <script defer src="/js/blackjack/reference-render.js"></script>
     <script defer src="/js/blackjack/stats-render.js"></script>
     <script defer src="/js/blackjack/boot.js"></script>
+    <!-- These load AFTER boot.js on purpose: they init on window 'load', and
+         their handlers must run second so BJ.instance already exists. -->
+    <script defer src="/js/blackjack/count-drills.js"></script>
+    <script defer src="/js/blackjack/hub.js"></script>
 </body>
 </html>

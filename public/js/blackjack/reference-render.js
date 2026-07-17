@@ -1,19 +1,23 @@
 // ==========================================
-// reference-render.js — Strategy Library modal, rendered FROM BJ.StrategyData
-// (Phase C, plan §2 bug #11 / §6's "reference modal must be data-driven, not
-// stale HTML" verification item)
+// reference-render.js — Strategy Library, rendered FROM BJ.StrategyData
 //
-// The old blackjack.html hand-authored the entire reference modal
-// (blackjack.html:34-118) as static markup that could silently drift from
-// the actual `Strategy` object the engine used to grade decisions. This
-// file builds every cell of every table via real DOM APIs, reading
-// directly from `BJ.StrategyData` (the single source of truth strategy-
-// engine.js also reads from) — so the modal is provably in sync with what
-// the game actually grades, not a second hand-copied source of truth.
+// Every cell is built from `BJ.StrategyData` — the same object
+// strategy-engine.js grades against — so the charts are provably in sync
+// with what the game actually enforces. Never hand-author cells.
 //
-// Renders into `#reference-modal-body`, an assumed-empty container inside
-// the existing `#reference-modal` (guarded — no-ops entirely if that
-// container doesn't exist yet, since the HTML phase hasn't added it).
+// LAYOUT CONTRACT (the "charts must fit the screen" requirement): only ONE
+// chart is on screen at a time, behind a segmented switcher, and each table
+// is sized to FILL its container rather than overflow it —
+// `table-layout: fixed; width:100%; height:100%` lets the browser
+// distribute the 10 dealer columns and the N rows into whatever box it's
+// given, so neither axis ever scrolls. Labels are therefore kept terse on
+// purpose (e.g. '≥ +3', 'Surr') — long strings would force wrapping that a
+// height-distributed row can't afford. See blackjack.css §7.
+//
+// `render(container)` is reusable: the hub's Charts tab and the in-game
+// #reference-modal both call it with their own container, each getting an
+// independent switcher (state is per-container, held in closures — no
+// shared globals, no duplicate ids).
 // ==========================================
 
 (function (root) {
@@ -27,11 +31,26 @@
 
     var DEALER_HEADERS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'A'];
 
-    // Play code -> full label, used for a legend and for cell title attrs.
+    // Full names (tooltips / legend). Kept separate from the terse cell text.
     var PLAY_LABELS = {
         H: 'Hit', S: 'Stand', D: 'Double (else Hit)', Ds: 'Double (else Stand)',
-        P: 'Split', R: 'Surrender (else Hit)'
+        P: 'Split', R: 'Surrender (else Hit)', buy: 'Buy Insurance'
     };
+
+    // Terse labels for the deviations "Play" column — must fit a narrow
+    // fixed-width cell on a 375px phone without wrapping.
+    var PLAY_SHORT = {
+        H: 'Hit', S: 'Stand', D: 'Double', Ds: 'Dbl/St', P: 'Split', R: 'Surr', buy: 'Buy Ins'
+    };
+
+    var LEGEND = [
+        { code: 'H', label: 'Hit' },
+        { code: 'S', label: 'Stand' },
+        { code: 'D', label: 'Double' },
+        { code: 'Ds', label: 'Dbl/Stand' },
+        { code: 'P', label: 'Split' },
+        { code: 'R', label: 'Surrender' }
+    ];
 
     function el(tag, className, text) {
         var node = document.createElement(tag);
@@ -45,15 +64,13 @@
     }
 
     /**
-     * Builds one strategy table: `rows` is an array of { key, label } where
-     * `key` indexes into `dataTable` (StrategyData.hard/soft/pair), each
-     * value a 10-length array aligned to DEALER_HEADERS.
+     * Builds one 10-wide strategy grid. `rows` is [{ key, label }] indexing
+     * into `dataTable` (StrategyData.hard/soft/pair), each value a 10-length
+     * array aligned to DEALER_HEADERS.
      */
-    function buildGridTable(title, dataTable, rows) {
-        var wrapper = el('div', 'reference-table-wrapper');
-        wrapper.appendChild(el('h3', 'reference-table-title', title));
+    function buildGridTable(dataTable, rows) {
+        var table = el('table', 'reference-table reference-table-grid');
 
-        var table = el('table', 'reference-table');
         var thead = el('thead');
         var headRow = el('tr');
         headRow.appendChild(el('th', 'reference-row-label', ''));
@@ -75,46 +92,32 @@
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
-        wrapper.appendChild(table);
-        return wrapper;
+        return table;
+    }
+
+    function sortedNumericKeys(obj) {
+        return Object.keys(obj).map(Number).sort(function (a, b) { return a - b; });
     }
 
     function buildHardTable() {
-        var rows = Object.keys(StrategyData.hard)
-            .map(Number)
-            .sort(function (a, b) { return a - b; })
-            .map(function (total) { return { key: total, label: String(total) }; });
-        return buildGridTable('Hard Totals', StrategyData.hard, rows);
+        var rows = sortedNumericKeys(StrategyData.hard).map(function (t) { return { key: t, label: String(t) }; });
+        return buildGridTable(StrategyData.hard, rows);
     }
 
     function buildSoftTable() {
-        var rows = Object.keys(StrategyData.soft)
-            .map(Number)
-            .sort(function (a, b) { return a - b; })
-            .map(function (total) { return { key: total, label: 'A,' + (total - 11) }; });
-        return buildGridTable('Soft Totals', StrategyData.soft, rows);
+        var rows = sortedNumericKeys(StrategyData.soft).map(function (t) { return { key: t, label: 'A,' + (t - 11) }; });
+        return buildGridTable(StrategyData.soft, rows);
     }
 
     function buildPairTable() {
-        var rows = Object.keys(StrategyData.pair)
-            .map(Number)
-            .sort(function (a, b) { return a - b; })
-            .map(function (pairVal) {
-                var label = pairVal === 11 ? 'A,A' : (pairVal + ',' + pairVal);
-                return { key: pairVal, label: label };
-            });
-        return buildGridTable('Pairs', StrategyData.pair, rows);
+        var rows = sortedNumericKeys(StrategyData.pair).map(function (v) {
+            return { key: v, label: v === 11 ? 'A,A' : (v + ',' + v) };
+        });
+        return buildGridTable(StrategyData.pair, rows);
     }
 
-    /**
-     * Surrender is a sparse { total: { dealerValue: true } } shape, not a
-     * 10-wide array — rendered as a simple two-column list instead of the
-     * grid layout the other three tables use.
-     */
+    /** Surrender is a sparse { total: { dealerValue: true } } shape. */
     function buildSurrenderTable() {
-        var wrapper = el('div', 'reference-table-wrapper');
-        wrapper.appendChild(el('h3', 'reference-table-title', 'Late Surrender (hard totals only)'));
-
         var table = el('table', 'reference-table reference-table-surrender');
         var thead = el('thead');
         var headRow = el('tr');
@@ -124,96 +127,177 @@
         table.appendChild(thead);
 
         var tbody = el('tbody');
-        Object.keys(StrategyData.surrender)
-            .map(Number)
-            .sort(function (a, b) { return a - b; })
-            .forEach(function (total) {
-                var dealerVals = Object.keys(StrategyData.surrender[total])
-                    .map(Number)
-                    .sort(function (a, b) { return a - b; })
-                    .map(function (v) { return v === 11 ? 'A' : String(v); });
-                var tr = el('tr');
-                tr.appendChild(el('th', 'reference-row-label', 'Hard ' + total));
-                var td = el('td', actionClass('R'), dealerVals.join(', '));
-                tr.appendChild(td);
-                tbody.appendChild(tr);
-            });
+        sortedNumericKeys(StrategyData.surrender).forEach(function (total) {
+            var dealerVals = sortedNumericKeys(StrategyData.surrender[total])
+                .map(function (v) { return v === 11 ? 'A' : String(v); });
+            var tr = el('tr');
+            tr.appendChild(el('th', 'reference-row-label', 'Hard ' + total));
+            tr.appendChild(el('td', actionClass('R'), dealerVals.join(', ')));
+            tbody.appendChild(tr);
+        });
         table.appendChild(tbody);
-        wrapper.appendChild(table);
-        return wrapper;
+        return table;
     }
 
     /**
-     * Illustrious 18 (+ Fab 4 surrender indices + insurance) deviation
-     * list. Each StrategyData.deviations entry is { tc, dev, base } keyed
-     * by `<type>_<total>_<dealerValue>` (or the special `insurance` key) —
-     * parsed back into a human row: hand, dealer card, TC threshold,
-     * deviated play.
+     * Deviation keys are `<type>_<total>_<dealerValue>` (plus the special
+     * `insurance` key). Labels stay terse — the Play column already states
+     * the deviated action, so e.g. the surrender indices don't repeat
+     * "(surrender index)" in the Hand column.
      */
     function describeDeviationKey(key) {
-        if (key === 'insurance') {
-            return { hand: 'Insurance (dealer shows Ace)', dealer: '—' };
-        }
-        var parts = key.split('_'); // [type, total, dealerValue]
+        if (key === 'insurance') return { hand: 'Insurance', dealer: 'A' };
+        var parts = key.split('_');
         var type = parts[0], total = parts[1], dealerValue = Number(parts[2]);
         var dealerLabel = dealerValue === 11 ? 'A' : String(dealerValue);
         var handLabel;
-        if (type === 'hard') handLabel = 'Hard ' + total;
+        if (type === 'hard' || type === 'surrender') handLabel = 'Hard ' + total;
         else if (type === 'soft') handLabel = 'Soft ' + total;
         else if (type === 'pair') handLabel = (Number(total) === 11 ? 'A,A' : total + ',' + total);
-        else if (type === 'surrender') handLabel = 'Hard ' + total + ' (surrender index)';
         else handLabel = key;
         return { hand: handLabel, dealer: dealerLabel };
     }
 
     function buildDeviationsTable() {
-        var wrapper = el('div', 'reference-table-wrapper');
-        wrapper.appendChild(el('h3', 'reference-table-title', 'Illustrious 18 & Fab 4 Deviations'));
-
         var table = el('table', 'reference-table reference-table-deviations');
         var thead = el('thead');
         var headRow = el('tr');
-        ['Hand', 'Dealer Shows', 'True Count', 'Play'].forEach(function (h) {
-            headRow.appendChild(el('th', null, h));
-        });
+        ['Hand', 'Dlr', 'True Count', 'Play'].forEach(function (h) { headRow.appendChild(el('th', null, h)); });
         thead.appendChild(headRow);
         table.appendChild(thead);
 
         var tbody = el('tbody');
         Object.keys(StrategyData.deviations).forEach(function (key) {
             var entry = StrategyData.deviations[key];
-            var described = describeDeviationKey(key);
+            var d = describeDeviationKey(key);
             var tr = el('tr');
-            tr.appendChild(el('td', null, described.hand));
-            tr.appendChild(el('td', null, described.dealer));
-            tr.appendChild(el('td', null, (entry.tc >= 0 ? '+' : '') + entry.tc + ' or higher'));
-            var playCode = entry.dev === 'buy' ? 'Buy Insurance' : (PLAY_LABELS[entry.dev] || entry.dev);
-            var playTd = el('td', actionClass(entry.dev), playCode);
+            tr.appendChild(el('td', 'reference-row-label', d.hand));
+            tr.appendChild(el('td', null, d.dealer));
+            tr.appendChild(el('td', null, '≥ ' + (entry.tc >= 0 ? '+' : '') + entry.tc));
+            var playTd = el('td', actionClass(entry.dev), PLAY_SHORT[entry.dev] || entry.dev);
+            if (PLAY_LABELS[entry.dev]) playTd.title = PLAY_LABELS[entry.dev];
             tr.appendChild(playTd);
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
-        wrapper.appendChild(table);
-        return wrapper;
+        return table;
     }
+
+    /** Static reference: the frozen ruleset + the Hi-Lo tag values. */
+    function buildRulesPanel() {
+        var wrap = el('div', 'chart-rules');
+
+        var rules = el('div', 'chart-rules__block');
+        rules.appendChild(el('h4', null, 'The Rules of the Table'));
+        var ul = el('ul');
+        [
+            ['Decks', '6'],
+            ['Dealer', 'Stands on Soft 17 (S17)'],
+            ['Double After Split', 'Allowed (DAS)'],
+            ['Late Surrender', 'Allowed'],
+            ['Blackjack Pays', '3:2'],
+            ['Penetration', '75%']
+        ].forEach(function (pair) {
+            var li = el('li');
+            li.appendChild(el('strong', null, pair[0] + ': '));
+            li.appendChild(document.createTextNode(pair[1]));
+            ul.appendChild(li);
+        });
+        rules.appendChild(ul);
+        wrap.appendChild(rules);
+
+        var hilo = el('div', 'chart-rules__block');
+        hilo.appendChild(el('h4', null, 'Hi-Lo Counting System'));
+        var tags = el('div', 'hilo-tags');
+        [
+            { v: '+1', cards: '2 3 4 5 6', cls: 'hilo-plus' },
+            { v: '0', cards: '7 8 9', cls: 'hilo-zero' },
+            { v: '−1', cards: '10 J Q K A', cls: 'hilo-minus' }
+        ].forEach(function (t) {
+            var row = el('div', 'hilo-row');
+            row.appendChild(el('span', 'hilo-val ' + t.cls, t.v));
+            row.appendChild(el('span', 'hilo-cards', t.cards));
+            tags.appendChild(row);
+        });
+        hilo.appendChild(tags);
+        hilo.appendChild(el('p', 'chart-rules__note', 'True Count = Running Count ÷ Decks Remaining'));
+        wrap.appendChild(hilo);
+
+        return wrap;
+    }
+
+    function buildLegend() {
+        var legend = el('div', 'chart-legend');
+        LEGEND.forEach(function (item) {
+            var chip = el('span', 'chart-legend__item');
+            chip.appendChild(el('span', 'chart-legend__code ' + actionClass(item.code), item.code));
+            chip.appendChild(el('span', 'chart-legend__label', item.label));
+            legend.appendChild(chip);
+        });
+        return legend;
+    }
+
+    var CHARTS = [
+        { id: 'hard', label: 'Hard', build: buildHardTable, legend: true },
+        { id: 'soft', label: 'Soft', build: buildSoftTable, legend: true },
+        { id: 'pairs', label: 'Pairs', build: buildPairTable, legend: true },
+        { id: 'surrender', label: 'Surr', build: buildSurrenderTable, legend: false },
+        { id: 'deviations', label: 'Dev', build: buildDeviationsTable, legend: false },
+        { id: 'rules', label: 'Rules', build: buildRulesPanel, legend: false }
+    ];
 
     var ReferenceRender = {
         /**
-         * Clears and rebuilds `#reference-modal-body` from the live
-         * StrategyData object. Safe to call repeatedly (e.g. re-render on
-         * modal open) — always a full, idempotent rebuild since this is a
-         * rarely-opened reference view, not a hot render path (unlike the
-         * card table, which must never rebuild).
+         * Clears and rebuilds the strategy library inside `container`
+         * (defaults to `#reference-modal-body`). Returns false if the
+         * container doesn't exist. Idempotent full rebuild — this is a
+         * reference view, not a hot render path.
          */
-        render() {
-            var container = (typeof document !== 'undefined') ? document.getElementById('reference-modal-body') : null;
+        render(container) {
+            if (typeof document === 'undefined') return false;
+            container = container || document.getElementById('reference-modal-body');
             if (!container) return false;
+
             container.innerHTML = '';
-            container.appendChild(buildHardTable());
-            container.appendChild(buildSoftTable());
-            container.appendChild(buildPairTable());
-            container.appendChild(buildSurrenderTable());
-            container.appendChild(buildDeviationsTable());
+            container.classList.add('chart-view');
+
+            var tabs = el('div', 'chart-tabs');
+            tabs.setAttribute('role', 'tablist');
+            var panels = el('div', 'chart-panels');
+
+            var tabEls = [];
+            var panelEls = [];
+
+            function activate(idx) {
+                tabEls.forEach(function (t, i) {
+                    var on = i === idx;
+                    t.classList.toggle('active', on);
+                    t.setAttribute('aria-selected', on ? 'true' : 'false');
+                });
+                panelEls.forEach(function (p, i) {
+                    p.classList.toggle('active', i === idx);
+                });
+            }
+
+            CHARTS.forEach(function (chart, idx) {
+                var tab = el('button', 'chart-tab', chart.label);
+                tab.setAttribute('role', 'tab');
+                tab.setAttribute('aria-label', chart.label + ' chart');
+                tab.addEventListener('click', function () { activate(idx); });
+                tabs.appendChild(tab);
+                tabEls.push(tab);
+
+                var panel = el('div', 'chart-panel');
+                panel.setAttribute('role', 'tabpanel');
+                panel.appendChild(chart.build());
+                if (chart.legend) panel.appendChild(buildLegend());
+                panels.appendChild(panel);
+                panelEls.push(panel);
+            });
+
+            container.appendChild(tabs);
+            container.appendChild(panels);
+            activate(0);
             return true;
         }
     };
@@ -224,16 +308,3 @@
         module.exports = ReferenceRender;
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
-
-// ==========================================
-// NEW element id required: #reference-modal-body (empty container inside
-// the existing #reference-modal for this file to render into — the HTML
-// phase should delete the old hand-authored table markup at
-// blackjack.html:34-118 and replace it with this one empty div).
-//
-// NEW classes this file assumes will be styled by the CSS phase:
-//   .reference-table-wrapper, .reference-table-title, .reference-table,
-//   .reference-row-label, .reference-table-surrender,
-//   .reference-table-deviations, .action-H, .action-S, .action-D,
-//   .action-Ds, .action-P, .action-R, .action-buy
-// ==========================================

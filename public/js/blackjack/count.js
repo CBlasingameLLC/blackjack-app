@@ -37,6 +37,18 @@
     const Count = {
         runningCount: 0,
 
+        /**
+         * The Hi-Lo tag for a card (+1 / 0 / -1), WITHOUT touching the
+         * shared running count. The standalone count drills
+         * (count-drills.js) tally their own local count with this — they
+         * run on their own shoe, and calling registerCard() there would
+         * corrupt the live table session's count, since `runningCount` is
+         * a singleton.
+         */
+        tagOf(card) {
+            return card ? hiLoTag(card) : 0;
+        },
+
         // Idempotent: applies the Hi-Lo tag exactly once per card object,
         // ever, regardless of how many times rendering calls this.
         registerCard(card) {

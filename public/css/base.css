@@ -1,6 +1,33 @@
-/* Minimal base — box model reset + Font Awesome icon glue.
-   Blackjack Pro's own visual identity lives entirely in blackjack.css;
-   this file only carries structural bits every element needs. */
+/* Minimal base — box model reset, self-hosted fonts, Font Awesome icon glue.
+   Blackjack Pro's own visual identity (tokens + components) lives entirely in
+   blackjack.css; this file carries only structural bits every element needs. */
+
+/* ==========================================================================
+   SELF-HOSTED FONTS (offline-safe for PWA / Capacitor — no CDN dependency).
+   Both are Latin-subset VARIABLE fonts, so one file covers the whole weight
+   range. Font Awesome is still CDN in index.html — flagged for later
+   self-hosting, out of scope for this pass.
+   ========================================================================== */
+
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 100 900;               /* variable */
+    font-display: swap;
+    src: url('/fonts/inter-var.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Playfair Display';
+    font-style: normal;
+    font-weight: 400 900;               /* variable */
+    font-display: swap;
+    src: url('/fonts/playfair-var.woff2') format('woff2');
+}
+
+/* ==========================================================================
+   RESET
+   ========================================================================== */
 
 *, *::before, *::after {
     box-sizing: border-box;
@@ -13,6 +40,11 @@ body {
 button {
     font-family: inherit;
 }
+
+/* ==========================================================================
+   FONT AWESOME GLUE (family names match the CDN's 'Font Awesome 5 Free' /
+   'Font Awesome 5 Brands' — see index.html's <link>).
+   ========================================================================== */
 
 .icon {
     text-decoration: none;

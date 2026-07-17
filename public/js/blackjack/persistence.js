@@ -22,6 +22,9 @@
     // Ring-buffer caps (plan §3.2 / §3.4).
     const MISTAKE_LOG_CAP = 200;
     const HAND_HISTORY_CAP = 200;
+    // One entry per graded decision — the source for the accuracy-over-time
+    // trend. Same ring-buffer discipline as the other two.
+    const ACCURACY_HISTORY_CAP = 200;
 
     function hasLocalStorage() {
         return typeof localStorage !== 'undefined' && localStorage !== null;
@@ -34,10 +37,28 @@
             hideTotals: false,
             disableBanner: false,
             soundEnabled: false,
-            gameSpeed: 600
+            gameSpeed: 600,
+
+            // --- Phase 2: training options ---
+            // 'flash' = one graded decision per fabricated hand (the original
+            // drill behaviour); 'full' = play the hand out to resolution,
+            // grading every decision.
+            drillStyle: 'flash',
+            // Periodic count quiz during a graded Play session.
+            // 'off' | 'running' (asks the running count) | 'true' (hides the
+            // TC readout and asks for the true count, so decks must be
+            // estimated).
+            countPrompt: 'off',
+            countPromptInterval: 3,   // hands between prompts
+            // Speed Count drill config.
+            speedCountSize: 52,       // cards per run
+            speedCountRate: 2         // cards per second
         };
     }
 
+    // Every mode that can record graded decisions. `_recordDecision` also
+    // creates missing buckets on the fly, so this list is for a clean
+    // default shape / stable ordering, not correctness.
     function defaultStatsBucket() {
         return {
             startedAt: null,
@@ -49,7 +70,12 @@
                 pairs: { total: 0, correct: 0 },
                 soft: { total: 0, correct: 0 },
                 deviations: { total: 0, correct: 0 },
-                surrender: { total: 0, correct: 0 }
+                surrender: { total: 0, correct: 0 },
+                'count-running': { total: 0, correct: 0 },
+                'count-true': { total: 0, correct: 0 },
+                'count-speed': { total: 0, correct: 0 },
+                estimation: { total: 0, correct: 0 },
+                targeted: { total: 0, correct: 0 }
             }
         };
     }
@@ -59,6 +85,16 @@
         SCHEMA_VERSION,
         MISTAKE_LOG_CAP,
         HAND_HISTORY_CAP,
+        ACCURACY_HISTORY_CAP,
+
+        /**
+         * The canonical empty stats shape. Exposed so callers that need to
+         * RESET stats (stats-render.js's "Clear History") use this one
+         * definition instead of hand-maintaining a duplicate copy — that
+         * duplicate had already drifted out of sync once.
+         */
+        defaultStatsBucket,
+        defaultSettings,
 
         /**
          * Reads `KEY_PREFIX + key` from localStorage, JSON-parsed. Returns
@@ -134,6 +170,24 @@
             log.push(entry);
             while (log.length > MISTAKE_LOG_CAP) log.shift();
             this.set('mistake_log', log);
+            return log;
+        },
+
+        getAccuracyHistory() {
+            return this.get('accuracy_history', []);
+        },
+        /**
+         * Pushes one graded decision — `{ t, correct, mode }` — onto the
+         * accuracy ring buffer. Deliberately per-decision rather than a
+         * pre-aggregated rollup: the trend chart derives a rolling average
+         * from these, and keeping the raw points means the window size can
+         * change later without a migration.
+         */
+        pushDecision(entry) {
+            const log = this.getAccuracyHistory();
+            log.push(entry);
+            while (log.length > ACCURACY_HISTORY_CAP) log.shift();
+            this.set('accuracy_history', log);
             return log;
         },
 

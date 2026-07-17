@@ -1,219 +1,368 @@
 /* ==========================================================================
-   BLACKJACK PRO — game-only stylesheet
-   Extracted from custom.css:1228-1759 (Phase D, plan §4.1). Loaded only on
-   /games/blackjack/ via blackjack.html's `extra_css` front-matter variable,
-   read by _includes/app.html — see that file for the include mechanism.
+   BLACKJACK PRO — Modern Noir design system
+   Total presentation-layer rebuild. Game logic (render.js / game-manager.js /
+   count.js / strategy-*) is untouched; this file only restyles the class /
+   id hooks those modules already toggle. See render.js:591-624 and
+   ui-bindings.js:49-130 for the full contract of ids/classes that MUST keep
+   working — every one of them is honored below.
 
-   During extraction, the duplicated "V1 -> OVERRIDE" rule pairs the plan
-   identified (.menu-btn, .table-bet-bubble x3, .felt-text, #reference-modal's
-   !important block) were merged into single clean rules carrying only the
-   FINAL cascade-resolved values, with `!important` dropped wherever it was
-   only there to fight an earlier conflicting rule that no longer exists
-   after the merge. `.strategy-table` (the old hand-authored reference
-   tables) is dropped entirely — nothing outside blackjack.html referenced
-   it, and blackjack.html no longer does either (replaced by the data-driven
-   `.reference-table` component below). `.card-hidden`/`.split-container`
-   are kept as harmless unused leftovers for rollback parity with keeping
-   the old blackjack.js in place.
+   Structure:
+     0. Tokens          1. Base / layout shell     2. Top bar
+     3. Table & cards   4. Chips & bet UI          5. Action dashboard
+     6. Main menu       7. Modals (reference/stats/settings)
+     8. Feedback (banner / toast / felt watermark)
+     9. Short-screen tuning   10. Desktop companion layout
    ========================================================================== */
 
 /* =========================================
-   NATIVE CSS CARDS
+   0. TOKENS
    ========================================= */
+:root {
+    /* Surfaces — near-black base + elevated charcoal steps */
+    --bg-base:    #0a0a0c;
+    --surface-1:  #101013;   /* dashboard, menu backdrop */
+    --surface-2:  #17171b;   /* modals, settings, card-secondary */
+    --surface-3:  #202027;   /* buttons, elevated chrome */
+    --surface-4:  #2b2b33;   /* hover / active */
+    --felt-glow:  rgba(26, 74, 52, 0.50);  /* the deep-green table vignette */
 
-.playing-card {
-    width: 85px;
-    height: 120px;
-    background: #ffffff;
-    border-radius: 8px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    padding: 6px;
-    box-sizing: border-box;
-    font-family: 'Helvetica Neue', Arial, sans-serif;
-    font-weight: bold;
-    position: relative;
-    user-select: none;
-    perspective: 1000px; /* gives .card-inner's rotateY some depth */
+    /* Single gold accent */
+    --gold:        #e3c16f;
+    --gold-strong: #f4d98a;
+    --gold-deep:   #a07d2c;
+    --gold-line:   rgba(227, 193, 111, 0.22);
+
+    /* Hairlines */
+    --hairline:      rgba(255, 255, 255, 0.08);
+    --hairline-soft: rgba(255, 255, 255, 0.05);
+
+    /* Text (on dark) */
+    --text-hi:  #f4f2ec;
+    --text-mid: rgba(244, 242, 236, 0.62);
+    --text-lo:  rgba(244, 242, 236, 0.36);
+
+    /* Semantic — outcomes / count only, never action buttons */
+    --win:  #46c98a;
+    --loss: #e5545a;
+    --push: var(--gold);
+
+    /* Cards */
+    --card-face:  #f6f4ee;
+    --suit-red:   #c33b3b;
+    --suit-black: #1c1c22;
+    --card-w: 84px;
+    --card-h: 118px;
+    --card-overlap: -52px;
+
+    /* Type */
+    --font-ui:      'Inter', 'Helvetica Neue', Arial, sans-serif;
+    --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --font-mono:    ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+
+    /* Radius */
+    --r-sm: 8px;  --r-md: 12px;  --r-lg: 18px;  --r-xl: 24px;  --r-pill: 999px;
+
+    /* Elevation */
+    --elev-1: 0 2px 10px rgba(0, 0, 0, 0.45);
+    --elev-2: 0 12px 34px rgba(0, 0, 0, 0.55);
+    --elev-3: 0 24px 70px rgba(0, 0, 0, 0.70);
+
+    /* Legacy alias kept so any stray reference still resolves */
+    --accent-color: var(--gold);
+    --text-muted: var(--text-lo);
 }
 
-/* Card Colors */
-.playing-card.red .card-front { color: #e74c3c; }
-.playing-card.black .card-front { color: #222222; }
+/* =========================================
+   1. BASE / LAYOUT SHELL
+   ========================================= */
 
-/* --- Two-sided card structure (front face / back face), so the dealer
-   hole card can 3D-flip via rotateY on .card-inner (plan §4.2, render.js's
-   _buildCardEl). Only transform/opacity are animated — no layout thrash. --- */
+/* Body background/typography (was inline in index.html). Kept near-black so
+   the boot splash and menu blend seamlessly into the noir table. */
+body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    background-color: var(--bg-base);
+    color: var(--text-hi);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- Boot splash (was inline) --- */
+.boot-splash {
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(120% 80% at 50% 40%, var(--felt-glow) 0%, rgba(12, 26, 20, 0.25) 45%, rgba(10, 10, 12, 0) 75%),
+        var(--bg-base);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 999999;
+    transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+}
+.boot-splash__title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: var(--text-hi);
+    margin: 0;
+    font-size: 2.1em;
+    letter-spacing: 0.5px;
+}
+/* Wordmark treatment: "Blackjack" in high-emphasis, "Pro" in gold. */
+.boot-splash__title em,
+.hub__wordmark em {
+    font-style: normal;
+    color: var(--gold);
+    margin-left: 0.28em;
+}
+.boot-splash__spinner {
+    margin-top: 30px;
+    width: 38px;
+    height: 38px;
+    border: 3px solid rgba(255, 255, 255, 0.08);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+/* --- The table container. NOTE: ui-bindings.js forces
+   `style.display = 'flex'` when showing this element, so the layout model
+   here is a robust FLEX COLUMN (not grid) — grid would be overridden by the
+   inline display. Robustness comes from: flexible zones with `min-height:0`
+   (so card rows can't collapse to zero → the old "invisible cards" bug), the
+   dashboard as `flex:0 0 auto` (always claims its space → the old
+   "unreachable Deal button" bug), and safe-area insets. --- */
+#blackjack-container {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    /* height:100% (not 100dvh) avoids iOS address-bar reflow stretching */
+    height: 100%;
+    /* Hidden until a mode is chosen; ui-bindings.js sets style.display='flex'
+       (inline) to show it and 'none' to hide — inline overrides this base. */
+    display: none;
+    flex-direction: column;
+    background:
+        radial-gradient(120% 78% at 50% 32%, var(--felt-glow) 0%, rgba(12, 26, 20, 0.30) 42%, rgba(10, 10, 12, 0) 72%),
+        var(--bg-base);
+}
+
+/* State hooks render.js sets on the container (data-state + .state-*). Left
+   as intentional no-ops; present so future per-state polish needs no JS. */
+#blackjack-container.state-idle,
+#blackjack-container.state-betting,
+#blackjack-container.state-dealing,
+#blackjack-container.state-player-turn,
+#blackjack-container.state-insurance,
+#blackjack-container.state-dealer-turn,
+#blackjack-container.state-resolving { /* intentionally empty */ }
+
+/* Vertical zones (dealer / player). min-height:0 is the load-bearing fix. */
+.zone {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    z-index: 2;
+}
+.zone--dealer {
+    justify-content: flex-start;
+    padding-top: 0.6em;
+}
+.zone--player {
+    justify-content: flex-end;
+    padding-bottom: 0.4em;
+}
+
+/* =========================================
+   2. TOP BAR — normal flex row (no longer an absolute overlay, which was
+   part of the overlap fragility). Sits above the dealer zone.
+   ========================================= */
+.topbar {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1em;
+    padding: 0.7em 1em 0.2em;
+    padding-top: max(0.7em, env(safe-area-inset-top));
+    z-index: 60;
+}
+.topbar__group {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+}
+.topbar__group--left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5em;
+}
+
+/* Ghost icon buttons (settings / fullscreen) + text button (menu back) */
+.icon-btn,
+.text-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-mid);
+    cursor: pointer;
+    padding: 0.2em;
+    font-family: var(--font-ui);
+    transition: color 0.15s ease, transform 0.1s ease;
+}
+.icon-btn { font-size: 1.2em; line-height: 1; }
+.icon-btn:hover, .text-btn:hover { color: var(--text-hi); }
+.icon-btn:active, .text-btn:active { transform: scale(0.94); }
+.text-btn {
+    font-size: 0.9em;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    color: var(--text-hi);
+}
+
+/* Accuracy pill (session-stats) */
+.accuracy-pill {
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    padding: 0.3em 0.9em;
+    border-radius: var(--r-pill);
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    letter-spacing: 0.3px;
+    color: var(--gold);
+}
+
+/* =========================================
+   3. TABLE & CARDS
+   ========================================= */
+
+/* Score badges — noir pill with gold hairline (opacity is driven by
+   render.js via inline style; start hidden to avoid a "0" flash). */
+.score-badge {
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--gold-line);
+    color: var(--gold);
+    padding: 0.25em 0.9em;
+    border-radius: var(--r-pill);
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.7em;
+    opacity: 0;
+    z-index: 5;
+}
+
+/* Card rows: overlapping fan */
+#dealer-cards,
+.hand-cards {
+    display: flex;
+    flex-direction: row;
+    height: var(--card-h);
+    padding-left: 10px;
+}
+#dealer-cards .playing-card:not(:first-child),
+.hand-cards .playing-card:not(:first-child) {
+    margin-left: var(--card-overlap);
+}
+
+/* --- Card element. Keeps the front/back 3D structure render.js builds
+   (flip depends on it) — only the look changes. --- */
+.playing-card {
+    width: var(--card-w);
+    height: var(--card-h);
+    border-radius: 9px;
+    position: relative;
+    user-select: none;
+    perspective: 1000px;
+    /* deal-in initial state (render.js adds .dealt a frame later) */
+    opacity: 0;
+    transform: translateY(-38px) scale(0.86);
+    transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.32s ease;
+    transition-delay: calc(var(--deal-index, 0) * 90ms);
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.45));
+}
+.playing-card.dealt {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+/* doubled 3rd card lies sideways */
+.playing-card.dealt.sideways {
+    transform: rotate(90deg) translateY(18px);
+    transform-origin: center center;
+    z-index: 0;
+}
+
 .card-inner {
     position: relative;
     width: 100%;
     height: 100%;
     transform-style: preserve-3d;
-    transition: transform 0.4s cubic-bezier(0.4, 0.0, 0.2, 1);
+    transition: transform 0.45s cubic-bezier(0.4, 0.0, 0.2, 1);
 }
+.playing-card.face-down .card-inner { transform: rotateY(180deg); }
 
 .card-face {
     position: absolute;
     inset: 0;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    border-radius: 6px;
+    border-radius: 9px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    padding: 7px 8px;
     box-sizing: border-box;
-    padding: 6px;
 }
-
 .card-front {
-    background: #ffffff;
+    background: linear-gradient(160deg, #ffffff 0%, var(--card-face) 100%);
+    font-family: var(--font-ui);
+    font-weight: 800;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
+.playing-card.red .card-front   { color: var(--suit-red); }
+.playing-card.black .card-front { color: var(--suit-black); }
 
+/* Noir/gold card back (replaces the maroon dot pattern) */
 .card-back {
-    background: #800000;
-    background-image: radial-gradient(#b31b1b 15%, transparent 16%), radial-gradient(#b31b1b 15%, transparent 16%);
-    background-size: 20px 20px;
-    background-position: 0 0, 10px 10px;
-    border: 3px solid #ffffff;
-    box-sizing: border-box;
     transform: rotateY(180deg);
+    background:
+        repeating-linear-gradient(45deg,  rgba(227,193,111,0.10) 0 2px, transparent 2px 9px),
+        repeating-linear-gradient(-45deg, rgba(227,193,111,0.10) 0 2px, transparent 2px 9px),
+        linear-gradient(160deg, #1b1b21 0%, #121216 100%);
+    box-shadow: inset 0 0 0 2px var(--gold-deep), inset 0 0 0 5px #121216;
 }
 
-/* Face-down cards start rotated so the back face is what's visible;
-   removing .face-down (render.js's onHoleCardRevealed) flips it to front. */
-.playing-card.face-down .card-inner {
-    transform: rotateY(180deg);
-}
-
-/* Card Corner Labels */
-.card-top { font-size: 1.1em; line-height: 1; text-align: left; }
-.card-bottom { font-size: 1.1em; line-height: 1; text-align: right; transform: rotate(180deg); }
-
-/* Giant Center Suit */
+.card-top    { font-size: 1.05em; line-height: 1; text-align: left; }
+.card-bottom { font-size: 1.05em; line-height: 1; text-align: right; transform: rotate(180deg); }
 .card-middle {
-    font-size: 3em;
+    font-size: 2.9em;
     text-align: center;
     position: absolute;
-    top: 50%;
-    left: 50%;
+    top: 50%; left: 50%;
     transform: translate(-50%, -50%);
-    opacity: 0.8;
+    opacity: 0.85;
 }
 
-/* Legacy hole-card look — unused now that .card-back covers this, kept as a
-   harmless leftover (see file header). */
-.card-hidden {
-    background: #800000;
-    background-image: radial-gradient(#b31b1b 15%, transparent 16%), radial-gradient(#b31b1b 15%, transparent 16%);
-    background-size: 20px 20px;
-    background-position: 0 0, 10px 10px;
-    border: 3px solid #ffffff;
-}
+/* Legacy leftover — unused now, kept harmless for rollback parity */
+.card-hidden { background: #15151a; }
 .card-hidden * { display: none; }
 
-/* --- Deal-in animation: staggered by --deal-index (render.js's
-   _dealCardIn sets the property before insertion, then adds .dealt a full
-   paint later so the transition has a "before" state). transform/opacity
-   only, GPU-compositable on older iOS Safari (plan §4.2). --- */
-.playing-card {
-    opacity: 0;
-    transform: translateY(-40px) scale(0.85);
-    transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.35s ease;
-    transition-delay: calc(var(--deal-index, 0) * 100ms);
-}
-
-.playing-card.dealt {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-}
-
-/* Once dealt, the sideways/doubled-card transform takes over instead of the
-   deal-in transform (still transform-only). */
-.playing-card.dealt.sideways {
-    transform: rotate(90deg) translateY(20px);
-    transform-origin: center center;
-    z-index: 0;
-}
-
-/* =========================================
-   AP FEEDBACK TOAST
-   ========================================= */
-
-#ap-feedback {
-    position: absolute;
-    top: -60px; /* Hidden off-screen */
-    left: 50%;
-    transform: translateX(-50%);
-    background: #e74c3c;
-    color: white;
-    padding: 0.8em 1.5em;
-    border-radius: 30px;
-    font-weight: bold;
-    font-size: 0.9em;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-    transition: top 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    z-index: 1000;
-    pointer-events: none;
-    white-space: nowrap;
-}
-
-#ap-feedback.show {
-    top: 60px; /* Drops down below the exit bar */
-}
-
-/* =========================================
-   MESSAGE BANNER — opacity/visibility fade, not display swap (bug #12 /
-   plan §4.2). render.js toggles .visible/.hidden only; base rule keeps it
-   laid out (so the fade can animate) but non-interactive while hidden.
-   ========================================= */
-
-#game-message {
-    position: absolute;
-    top: 45%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0,0,0,0.85);
-    color: #ffffff;
-    padding: 1em 2em;
-    border-radius: 8px;
-    font-weight: 900;
-    font-size: 1.8em;
-    z-index: 100;
-    text-align: center;
-    border: 2px solid var(--accent-color);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition: opacity 0.3s ease, visibility 0s linear 0.3s;
-}
-
-#game-message.visible {
-    opacity: 1;
-    visibility: visible;
-    transition: opacity 0.3s ease, visibility 0s linear 0s;
-}
-
-#game-message.hidden {
-    opacity: 0;
-    visibility: hidden;
-}
-
-/* =========================================
-   SPLIT HAND LAYOUT / HAND COLUMNS
-   ========================================= */
-
-.split-container {
-    display: flex;
-    gap: 1.5em;
-    width: 100%;
-    justify-content: center;
-    align-items: flex-end;
-}
-
+/* --- Split hand columns --- */
+.split-container { display: flex; gap: 1.5em; width: 100%; justify-content: center; align-items: flex-end; }
 .hand-column {
     display: flex;
     flex-direction: column;
@@ -221,554 +370,1227 @@
     position: relative;
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
+.hand-column.inactive { opacity: 0.4; transform: scale(0.85) translateY(-8px); pointer-events: none; }
+.hand-column.active   { opacity: 1; transform: scale(1) translateY(0); }
+.hand-column.entering { opacity: 0; transform: scale(0.7) translateY(18px); }
+.hand-column.entered  { opacity: 1; transform: scale(1) translateY(0); }
 
-/* Dims and shrinks the hand you are not currently playing */
-.hand-column.inactive {
-    opacity: 0.4;
-    transform: scale(0.85) translateY(-10px);
-    pointer-events: none;
-}
-
-.hand-column.active {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-}
-
-/* New hand-column enter animation (a split just happened) — transform/
-   opacity only. */
-.hand-column.entering {
-    opacity: 0;
-    transform: scale(0.7) translateY(20px);
-}
-
-.hand-column.entered {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-}
-
-/* Overlapping Cards */
-.hand-cards {
-    display: flex;
-    flex-direction: row;
-    height: 120px;
-    padding-left: 10px; /* Buffer for the first card */
-}
-
-/* Forces every card AFTER the first one to slide left and overlap */
-.hand-cards .playing-card:not(:first-child) {
-    margin-left: -55px;
-    box-shadow: -4px 4px 10px rgba(0,0,0,0.3);
-}
-
+/* Per-hand score badge + win/loss/push pulse (transform/opacity/color only) */
 .hand-score-badge {
-    background: var(--accent-color);
-    padding: 0.2em 0.8em;
-    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid var(--gold-line);
+    color: var(--gold);
+    padding: 0.25em 0.85em;
+    border-radius: var(--r-pill);
+    font-family: var(--font-mono);
     font-size: 0.8em;
-    font-weight: bold;
+    font-weight: 700;
     margin-bottom: 0.5em;
-    color: #000000;
 }
-
-/* Win/loss/push pulse — color + transform/opacity only (plan §4.2: no
-   box-shadow animation for iOS Safari perf; a static box-shadow is fine,
-   animating one is not). render.js adds the class and removes it on
-   animationend. */
-.hand-score-badge.winner {
-    animation: badgePulseWin 1.8s ease-out;
-}
-.hand-score-badge.loser {
-    animation: badgePulseLoss 1.8s ease-out;
-}
-.hand-score-badge.push {
-    animation: badgePulsePush 1.8s ease-out;
-}
-
-@keyframes badgePulseWin {
-    0% { color: #000000; transform: scale(1); }
-    20% { color: #2ecc71; transform: scale(1.25); }
-    100% { color: #000000; transform: scale(1); }
-}
-@keyframes badgePulseLoss {
-    0% { color: #000000; transform: scale(1); }
-    20% { color: #e74c3c; transform: scale(1.25); }
-    100% { color: #000000; transform: scale(1); }
-}
-@keyframes badgePulsePush {
-    0% { color: #000000; transform: scale(1); }
-    20% { color: #f1c40f; transform: scale(1.15); }
-    100% { color: #000000; transform: scale(1); }
-}
+.hand-score-badge.winner { animation: badgePulseWin 1.7s ease-out; }
+.hand-score-badge.loser  { animation: badgePulseLoss 1.7s ease-out; }
+.hand-score-badge.push   { animation: badgePulsePush 1.7s ease-out; }
+@keyframes badgePulseWin  { 0% { color: var(--gold); transform: scale(1); } 20% { color: var(--win);  transform: scale(1.28); } 100% { color: var(--gold); transform: scale(1); } }
+@keyframes badgePulseLoss { 0% { color: var(--gold); transform: scale(1); } 20% { color: var(--loss); transform: scale(1.28); } 100% { color: var(--gold); transform: scale(1); } }
+@keyframes badgePulsePush { 0% { color: var(--gold); transform: scale(1); } 20% { color: var(--push); transform: scale(1.15); } 100% { color: var(--gold); transform: scale(1); } }
 
 /* =========================================
-   CHIPS & BET UI
+   4. CHIPS & BET UI (denomination colors are intentionally kept — they're
+   real casino conventions and good UX; only the treatment is refined)
    ========================================= */
+.chips { display: flex; gap: 0.7em; align-items: center; }
 
 .chip {
-    width: 60px;
-    height: 60px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 900;
-    font-size: 1.1em;
-    color: white;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.4), inset 0 0 0 4px rgba(255,255,255,0.2), inset 0 0 0 6px rgba(0,0,0,0.4);
-    border: 4px dashed rgba(255,255,255,0.8);
+    font-family: var(--font-ui);
+    font-weight: 800;
+    font-size: 0.95em;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+    border: 3px dashed rgba(255, 255, 255, 0.85);
+    box-shadow:
+        0 5px 12px rgba(0, 0, 0, 0.5),
+        inset 0 0 0 4px rgba(255, 255, 255, 0.14),
+        inset 0 0 0 6px rgba(0, 0, 0, 0.35);
     cursor: pointer;
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
-    user-select: none;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
+.chip:hover  { transform: translateY(-3px); }
+.chip:active { transform: scale(0.94); }
 
-.chip:active {
-    transform: scale(0.95);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 0 0 4px rgba(255,255,255,0.2), inset 0 0 0 6px rgba(0,0,0,0.4);
-}
+.chip.red    { background: radial-gradient(circle at 50% 40%, #e5544b, #b3352d); }  /* $5   */
+.chip.green  { background: radial-gradient(circle at 50% 40%, #35c07c, #1f8a56); }  /* $25  */
+.chip.black  { background: radial-gradient(circle at 50% 40%, #3a3f4a, #1c2027); }  /* $100 */
+.chip.purple { background: radial-gradient(circle at 50% 40%, #9a5bc0, #6d3a90); }  /* $500 */
 
-/* Chip Denominations */
-.chip.red { background-color: #e74c3c; }    /* $5 */
-.chip.green { background-color: #2ecc71; }  /* $25 */
-.chip.black { background-color: #2c3e50; }  /* $100 */
-.chip.purple { background-color: #8e44ad; } /* $500 */
-
+/* Bet spot on the felt (absolute within player-zone; shown by JS when bet>0) */
 #table-bet-area {
-    display: flex;
+    display: none;                 /* JS flips to flex */
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
+    position: absolute;
+    bottom: 128px;
+    left: 50%;
+    transform: translateX(-50%);
     width: 100px;
     height: 100px;
     cursor: pointer;
-    margin-bottom: 20px;
-    position: relative;
+    z-index: 4;
 }
-
+.bet-spot-ring {
+    width: 82px; height: 82px;
+    border: 2px dashed var(--gold-line);
+    border-radius: 50%;
+    position: absolute;
+    z-index: 1;
+}
 #chip-stack {
     display: flex;
-    flex-direction: column-reverse; /* Stacks chips upward */
+    flex-direction: column-reverse;
     align-items: center;
-    margin-bottom: 10px;
+    position: relative;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
 }
-
-/* Merged from the 3 duplicated "V1 -> OVERRIDE" .table-bet-bubble
-   definitions — final cascade-resolved values only (see file header). */
 .table-bet-bubble {
-    background: rgba(0,0,0,0.85);
-    border: 2px solid #f1c40f;
-    color: #f1c40f;
-    padding: 0.3em 0.8em;
-    border-radius: 20px;
-    font-weight: 900;
-    font-family: monospace;
-    font-size: 0.9em;
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid var(--gold-line);
+    color: var(--gold);
+    padding: 0.28em 0.8em;
+    border-radius: var(--r-pill);
+    font-weight: 800;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
     position: absolute;
     top: 50%;
-    left: 110%;
-    bottom: auto;
+    left: 112%;
     height: max-content;
     line-height: 1;
     transform: translateY(-50%);
     z-index: 10;
     white-space: nowrap;
     width: max-content;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    box-shadow: var(--elev-1);
 }
+#insurance-bet-area {
+    position: absolute;
+    top: -42px;
+    font-size: 0.72em;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    border-bottom: 1px solid var(--gold-line);
+    padding-bottom: 5px;
+    display: none;
+    width: 220px;
+    text-align: center;
+}
+#insurance-chip-stack { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); height: 0; }
 
+/* thrown chip animation */
 .thrown-chip {
     width: 40px; height: 40px;
     font-size: 0.7em;
-    position: absolute; /* Allows them to stack on top of each other */
+    position: absolute;
     top: 0; left: 0;
-    box-shadow: 2px 4px 6px rgba(0,0,0,0.6);
+    box-shadow: 2px 4px 6px rgba(0, 0, 0, 0.6);
     animation: throwChip 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
-
 @keyframes throwChip {
-    0% { transform: translate(0, 150px) scale(1.5); opacity: 0; }
-    /* Uses dynamic variables set by JS for random scattering */
+    0%   { transform: translate(0, 150px) scale(1.5); opacity: 0; }
     100% { transform: translate(var(--x, 0), var(--y, 0)) rotate(var(--rot, 0deg)) scale(1); opacity: 1; }
 }
 
 /* =========================================
-   ROUTING & MENUS
+   5. ACTION DASHBOARD
    ========================================= */
+.dashboard {
+    flex: 0 0 auto;
+    background: linear-gradient(180deg, rgba(16,16,19,0.6) 0%, var(--surface-1) 40%);
+    border-top: 1px solid var(--hairline);
+    padding: 1.1em 1em;
+    padding-bottom: max(1.1em, env(safe-area-inset-bottom));
+    box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.35);
+    z-index: 10;
+}
 
+/* Unified premium buttons — monochrome; hierarchy comes from SIZE, and the
+   single gold accent goes to the contextual primary CTA (Deal). */
+.button {
+    -webkit-appearance: none;
+    appearance: none;
+    background: linear-gradient(180deg, var(--surface-3) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--hairline);
+    color: var(--text-hi);
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 0.98em;
+    letter-spacing: 0.4px;
+    padding: 0.85em 1em;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: transform 0.1s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.button:hover  { background: linear-gradient(180deg, var(--surface-4) 0%, var(--surface-3) 100%); border-color: var(--gold-line); }
+.button:active { transform: translateY(1px) scale(0.99); }
+
+.button--primary {
+    background: linear-gradient(180deg, var(--gold-strong) 0%, var(--gold) 55%, var(--gold-deep) 100%);
+    border: 1px solid var(--gold-strong);
+    color: #201700;
+    font-weight: 800;
+    box-shadow: 0 6px 18px rgba(227, 193, 111, 0.25);
+}
+.button--primary:hover { background: linear-gradient(180deg, #ffe7a4 0%, var(--gold-strong) 60%, var(--gold) 100%); }
+
+/* --- Two-tier game controls. #game-controls has data-display-mode="grid" in
+   the HTML so ui-bindings.js's showPanel restores it as a grid, not flex.
+   Row 1: Hit + Stand (large). Row 2: Double / Split / Surrender (small). --- */
+.action-grid {
+    display: none;                 /* JS flips to grid */
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6em;
+    margin-bottom: 0.9em;
+}
+.action-grid #btn-hit   { grid-column: 1; }
+.action-grid #btn-stand { grid-column: 2; }
+.action-grid #btn-hit,
+.action-grid #btn-stand {
+    min-height: 60px;
+    font-size: 1.12em;
+    font-weight: 800;
+    border-radius: var(--r-lg);
+    background: linear-gradient(180deg, var(--surface-4) 0%, var(--surface-3) 100%);
+}
+.secondary-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.5em;
+}
+.secondary-actions .button {
+    flex: 1;
+    min-height: 44px;
+    font-size: 0.86em;
+    font-weight: 600;
+    color: var(--text-mid);
+    padding: 0.6em 0.5em;
+}
+.secondary-actions .button:hover { color: var(--text-hi); }
+
+/* insurance row */
+.action-row {
+    display: none;                 /* JS flips to flex */
+    gap: 0.6em;
+    justify-content: center;
+    margin-bottom: 0.9em;
+}
+.action-row .button { flex: 1; }
+
+/* bet row (chips + Deal) */
+.bet-row {
+    display: flex;                 /* visible in betting/idle */
+    gap: 0.8em;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 0.9em;
+    flex-wrap: wrap;
+}
+#btn-deal { min-height: 52px; padding: 0 2.2em; margin-left: 0.4em; }
+
+/* readouts */
+.readouts {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5em;
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    color: var(--text-mid);
+}
+.readout { display: flex; gap: 0.4em; align-items: baseline; }
+.readout__label { color: var(--text-lo); letter-spacing: 0.5px; }
+.readout__value { font-weight: 700; color: var(--text-hi); }
+.readout__value--bankroll { color: var(--win); }
+.readout__value--tc { color: var(--gold); }
+#ui-bet-wrap { cursor: pointer; }
+
+/* Disabled buttons (native `disabled` attr, set by ui-bindings.js) */
+.dashboard button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none;
+}
+
+/* =========================================
+   6. THE HUB — fixed, NEVER scrolls. Rigid 4-row flex column:
+      wordmark (auto) / body (1fr, min-height:0) / Play CTA (auto) /
+      bottom nav (auto). Only the body's inner panels may scroll, and only
+      where content is genuinely unbounded (Stats/Settings) — the Drills,
+      Count and Charts panels are sized to fit.
+   ========================================= */
 #main-menu {
     position: absolute;
-    top: 0; left: 0; width: 100vw; height: 100dvh;
-    background: rgba(11, 43, 29, 0.95);
-    backdrop-filter: blur(10px);
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100%;               /* not 100dvh — same iOS reflow reason as the table */
+    background:
+        radial-gradient(120% 80% at 50% 26%, var(--felt-glow) 0%, rgba(12,26,20,0.25) 42%, rgba(10,10,12,0) 72%),
+        var(--bg-base);
+    display: flex;
+    flex-direction: column;
+    z-index: 200;
+    overflow: hidden;           /* the hub itself never scrolls */
+}
+
+/* --- lowkey wordmark (logo slot reserved) --- */
+.hub__top {
+    flex: 0 0 auto;
+    padding: 0.9em 1.1em 0.5em;
+    padding-top: max(0.9em, env(safe-area-inset-top));
+}
+.hub__wordmark {
+    font-family: var(--font-display);
+    font-size: 1.05em;
+    font-weight: 700;
+    color: var(--text-mid);
+    letter-spacing: 0.3px;
+}
+
+/* --- body / panels --- */
+.hub__body {
+    flex: 1 1 auto;
+    min-height: 0;              /* load-bearing: lets panels shrink, not overflow */
+    display: flex;
+    padding: 0 1.1em;
+}
+.hub-panel { display: none; width: 100%; min-height: 0; }
+.hub-panel.active { display: flex; flex-direction: column; }
+
+.hub-fill { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.hub-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* --- mode tiles ---
+   "Box art" stays inside the noir palette: a deep charcoal gradient with a
+   restrained per-tile hue tint and a gold glyph. Saturated per-tile colour
+   is what made the original look like a toy — hue here is a whisper, not a
+   statement. */
+.tile-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 1fr;
+    gap: 0.7em;
+    align-content: start;
+    padding-bottom: 0.3em;
+    overflow-y: auto;
+}
+.tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 0.15em;
+    min-height: 92px;
+    padding: 0.9em;
+    text-align: left;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    background: linear-gradient(150deg, var(--surface-3) 0%, var(--surface-1) 78%);
+    color: var(--text-hi);
+    font-family: var(--font-ui);
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+}
+/* the gradient "art" wash */
+.tile::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(90% 70% at 100% 0%, var(--tile-tint, rgba(227,193,111,0.10)) 0%, transparent 70%);
+    pointer-events: none;
+}
+.tile:hover { transform: translateY(-2px); border-color: var(--gold-line); }
+.tile:active { transform: translateY(0) scale(0.99); }
+
+.tile__glyph {
+    font-size: 1.35em;
+    color: var(--gold);
+    opacity: 0.9;
+    margin-bottom: auto;
+}
+.tile__name { font-size: 0.95em; font-weight: 700; letter-spacing: 0.2px; }
+.tile__sub { font-size: 0.72em; color: var(--text-lo); }
+
+/* per-tile hue tint — restrained */
+.tile--hard  { --tile-tint: rgba(227,193,111,0.13); }
+.tile--soft  { --tile-tint: rgba(120,190,255,0.10); }
+.tile--pairs { --tile-tint: rgba(160,120,220,0.10); }
+.tile--dev   { --tile-tint: rgba(70,201,138,0.10); }
+.tile--surr  { --tile-tint: rgba(229,84,90,0.10); }
+.tile--speed { --tile-tint: rgba(255,180,90,0.10); }
+.tile--checks{ --tile-tint: rgba(120,190,255,0.10); }
+.tile--estim { --tile-tint: rgba(70,201,138,0.10); }
+.tile--targeted { --tile-tint: rgba(229,84,90,0.12); }
+
+/* unavailable tiles read as deliberately inert, not broken */
+.tile--soon, .tile:disabled { cursor: default; opacity: 0.45; }
+.tile--soon:hover, .tile:disabled:hover { transform: none; border-color: var(--hairline); }
+.tile__soon {
+    position: absolute;
+    top: 0.7em; right: 0.7em;
+    font-size: 0.58em;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--gold);
+    border: 1px solid var(--gold-line);
+    border-radius: var(--r-pill);
+    padding: 0.15em 0.5em;
+}
+
+/* --- persistent Play CTA --- */
+.hub__cta {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.8em 1.1em;
+}
+.hub__play { flex: 1 1 auto; min-height: 52px; font-size: 1.02em; }
+
+.segmented {
+    display: flex;
+    flex: 0 0 auto;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-pill);
+    padding: 3px;
+}
+.seg {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--text-lo);
+    font-family: var(--font-ui);
+    font-size: 0.74em;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 0.5em 0.75em;
+    border-radius: var(--r-pill);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.seg.active { background: var(--surface-3); color: var(--gold); }
+
+/* --- bottom nav --- */
+.hub__nav {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    gap: 0.2em;
+    background: var(--surface-1);
+    border-top: 1px solid var(--hairline);
+    padding: 0.5em 0.4em;
+    padding-bottom: max(0.5em, env(safe-area-inset-bottom));
+}
+.hub-tab {
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    z-index: 200;
-    transition: opacity 0.3s ease;
-}
-
-/* Merged from the 2 duplicated "V1 -> OVERRIDE" .menu-btn definitions —
-   final cascade-resolved values only (see file header). */
-.menu-btn {
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-    border: 2px solid rgba(255,255,255,0.1);
-    color: #ffffff;
-    font-family: 'Inter', sans-serif;
-    font-size: 1.1em;
-    font-weight: 800;
-    padding: 1.2em 2em;
-    margin: 0.5em 0;
-    width: 85%;
-    max-width: 320px;
-    border-radius: 30px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
+    gap: 0.3em;
+    background: transparent;
+    border: none;
+    color: var(--text-lo);
+    font-family: var(--font-ui);
+    font-size: 0.62em;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 0.4em 0.1em;
+    border-radius: var(--r-md);
     cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 6px 15px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    transition: color 0.15s ease;
 }
+.hub-tab i { font-size: 1.5em; }
+.hub-tab.active { color: var(--gold); }
+.hub-tab:hover { color: var(--text-hi); }
+.hub-tab.active:hover { color: var(--gold-strong); }
 
-.menu-btn:hover, .menu-btn:active {
-    background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.2);
+/* --- settings panel (relocated out of the old table dropdown) --- */
+.settings-panel { padding-bottom: 0.5em; }
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.7em 0;
+    border-bottom: 1px solid var(--hairline-soft);
+    cursor: pointer;
+    color: var(--text-hi);
+    font-size: 0.9em;
+    font-weight: 500;
 }
-
-/* Strategy Library button stays distinctly Ruby Red */
-#btn-open-reference {
-    background: linear-gradient(135deg, #4b134f 0%, #c94b4b 100%);
-    margin-top: 2em;
+.settings-panel input[type="checkbox"] {
+    -webkit-appearance: auto;
+    appearance: auto;
+    width: 18px; height: 18px;
+    flex-shrink: 0;
+    margin: 0;
+    accent-color: var(--gold);
+    cursor: pointer;
 }
+.settings-select-row { justify-content: space-between; }
+.settings-panel select {
+    background: var(--surface-3);
+    color: var(--text-hi);
+    border: 1px solid var(--gold-line);
+    padding: 5px 8px;
+    border-radius: var(--r-sm);
+    outline: none;
+    font-family: var(--font-ui);
+}
+.settings-heading {
+    font-size: 0.72em;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.5em;
+    font-weight: 700;
+}
+.settings-divider { margin-top: 1.4em; padding-top: 1em; border-top: 1px solid var(--hairline); }
+.settings-rules-note { color: var(--text-mid); font-size: 0.85em; margin: 0; line-height: 1.5; }
 
+/* =========================================
+   7. MODALS (reference / stats / settings)
+   ========================================= */
+.modal-sheet {
+    display: none;                 /* ui-bindings.js flips to 'flex' */
+    flex-direction: column;
+    position: absolute;
+    top: 4%; left: 50%;
+    transform: translateX(-50%);
+    width: 92%;
+    max-width: 720px;
+    height: 92%;
+    background: var(--surface-2);
+    border: 1px solid var(--gold-line);
+    border-radius: var(--r-xl);
+    z-index: 300;
+    overflow: hidden;              /* charts fit; nothing scrolls */
+    padding: 1.6em 1.2em 1.2em;
+    box-sizing: border-box;
+    box-shadow: var(--elev-3);
+    color: var(--text-hi);
+}
+.modal-fill { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .close-modal {
     position: absolute;
-    top: 10px; right: 15px;
-    font-size: 2em;
-    color: rgba(255,255,255,0.5);
+    top: 12px; right: 16px;
+    font-size: 1.8em;
+    line-height: 1;
+    color: var(--text-lo);
     cursor: pointer;
     border: none;
     background: transparent;
+    transition: color 0.15s ease;
 }
+.close-modal:hover { color: var(--text-hi); }
 
-/* Enhancing the Top Bar Text */
-#btn-return-menu, #btn-settings, #btn-fullscreen, #btn-open-stats {
-    color: #ffffff;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-    font-weight: bold;
-}
-
-/* =========================================
-   SETTINGS MENU
-   ========================================= */
-
-#settings-menu {
-    background: #111111;
-    color: #ffffff;
-    border: 1px solid rgba(255,255,255,0.2);
-    min-width: 280px;
-}
-
-#settings-menu label {
-    display: flex;
-    align-items: center;
-    white-space: nowrap;
-    color: #ffffff;
-    font-weight: 600;
+#reference-modal h2 {
+    flex: 0 0 auto;
+    font-family: var(--font-display);
+    color: var(--gold);
+    font-weight: 700;
+    font-size: 1.15em;
     letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 0.5em;
+    margin: 0 0 0.7em;
 }
+/* --- Strategy charts: ONE chart at a time, sized to FILL its box so that
+   neither axis ever scrolls (the old rules used min-width:500px inside an
+   overflow-x:auto wrapper, which forced side-scrolling, and stacked all
+   five tables, which forced vertical scrolling).
 
-/* Merged checkbox visibility fixes — a single clean rule, no !important
-   needed since there's nothing left in this file to fight. */
-#settings-menu input[type="checkbox"] {
-    -webkit-appearance: auto;
-    appearance: auto;
-    display: inline-block;
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-    margin: 0 12px 0 0;
-    accent-color: var(--accent-color);
+   The mechanic: the panel is a flex child with min-height:0, and the table
+   is width:100%/height:100% with table-layout:fixed — so the browser
+   distributes the 10 dealer columns across the width and the N rows down
+   the height, into whatever box remains. Font-size is clamped to stay
+   legible while shrinking. Nothing here may reintroduce a min-width. --- */
+
+.chart-view { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+
+.chart-tabs {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 0.3em;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-pill);
+    padding: 3px;
+    margin-bottom: 0.6em;
+}
+.chart-tab {
+    flex: 1 1 0;
+    background: transparent;
+    border: none;
+    color: var(--text-lo);
+    font-family: var(--font-ui);
+    font-size: 0.72em;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 0.5em 0.2em;
+    border-radius: var(--r-pill);
     cursor: pointer;
-    opacity: 1;
-    visibility: visible;
+    transition: background 0.15s ease, color 0.15s ease;
 }
+.chart-tab.active { background: var(--surface-3); color: var(--gold); }
 
-#settings-menu select {
-    background: #222;
-    color: white;
-    border: 1px solid var(--accent-color);
-    padding: 4px;
-    border-radius: 4px;
-    outline: none;
-}
-
-/* =========================================
-   REFERENCE MODAL (Strategy Library) — data-driven, rendered by
-   reference-render.js into #reference-modal-body.
-   ========================================= */
-
-/* Merged from the base #reference-modal rule + its later !important
-   override block — one clean rule, final cascade-resolved values. */
-#reference-modal {
-    display: none;
-    position: absolute;
-    top: 5%; left: 5%; width: 90%; height: 90%;
-    background: #111111;
-    border: 2px solid var(--accent-color);
-    border-radius: 12px;
-    z-index: 300;
-    overflow-y: auto;
-    padding: 2em 1.5em;
-    box-sizing: border-box;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-    color: #ffffff;
-}
-
-#reference-modal h2, #reference-modal h3 {
-    color: var(--accent-color);
-    font-weight: 800;
-    letter-spacing: 1px;
-}
-
-#reference-modal p,
-#reference-modal ul,
-#reference-modal li {
-    font-size: 0.95em;
-}
-
-#reference-modal p,
-#reference-modal ul,
-#reference-modal li,
-#reference-modal em,
-#reference-modal strong {
-    color: #ffffff;
-}
-
-.reference-table-wrapper {
-    overflow-x: auto;
-    margin-bottom: 2em;
-}
-
-.reference-table-title {
-    margin-top: 2em;
-    color: #f1c40f;
-}
+.chart-panels { flex: 1 1 auto; min-height: 0; display: flex; }
+.chart-panel { display: none; width: 100%; min-height: 0; }
+.chart-panel.active { display: flex; flex-direction: column; gap: 0.5em; }
 
 .reference-table {
+    flex: 1 1 auto;
     width: 100%;
-    min-width: 500px;
+    height: 100%;               /* rows distribute into the available height */
+    table-layout: fixed;
     border-collapse: collapse;
-    margin-top: 1em;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.85em;
-    background: #111111;
-    color: #ffffff;
+    font-family: var(--font-ui);
+    font-size: clamp(8px, 2.5vw, 13px);
+    color: var(--text-hi);
 }
-
-.reference-table th,
-.reference-table td {
-    border: 1px solid rgba(255,255,255,0.3);
-    padding: 0.5em;
+.reference-table th, .reference-table td {
+    border: 1px solid var(--hairline);
+    padding: 0;
     text-align: center;
-    color: #ffffff;
-    font-weight: bold;
+    font-weight: 700;
+    overflow: hidden;
+    white-space: nowrap;
 }
+.reference-table th { background: var(--surface-3); color: var(--gold); }
+.reference-row-label { background: var(--surface-1); }
 
-.reference-table th {
-    background: #222222;
-    color: var(--accent-color);
-}
+/* 10-wide grids: narrow label column, 10 equal dealer columns. */
+.reference-table-grid th:first-child,
+.reference-table-grid td:first-child { width: 12%; }
 
-.reference-row-label {
-    background: #1a1a1a;
-    text-align: left;
-    padding-left: 0.8em;
-}
+/* Deviations: 4 text columns, widths tuned so nothing wraps at 375px. */
+.reference-table-deviations th:nth-child(1), .reference-table-deviations td:nth-child(1) { width: 34%; text-align: left; padding-left: 0.4em; }
+.reference-table-deviations th:nth-child(2), .reference-table-deviations td:nth-child(2) { width: 14%; }
+.reference-table-deviations th:nth-child(3), .reference-table-deviations td:nth-child(3) { width: 24%; }
+.reference-table-deviations th:nth-child(4), .reference-table-deviations td:nth-child(4) { width: 28%; }
 
-/* Action-code color legend — distinct, casino-consistent hues.
-   H = neutral blue, S = green, D/Ds = gold/amber, P = purple, R = red,
-   buy (insurance) = orange. */
-.action-H  { background-color: #3498db; color: #ffffff; }
-.action-S  { background-color: #27ae60; color: #ffffff; }
-.action-D  { background-color: #f1c40f; color: #1a1a1a; }
-.action-Ds { background-color: #f39c12; color: #1a1a1a; }
-.action-P  { background-color: #8e44ad; color: #ffffff; }
-.action-R  { background-color: #e74c3c; color: #ffffff; }
-.action-buy { background-color: #e67e22; color: #ffffff; }
+.reference-table-surrender th:first-child,
+.reference-table-surrender td:first-child { width: 40%; text-align: left; padding-left: 0.4em; }
 
-.reference-table-surrender .reference-row-label,
-.reference-table-deviations td:first-child {
-    text-align: left;
-}
-
-/* =========================================
-   STATS MODAL — mirrors #reference-modal's show/hide pattern (plan §3.4),
-   rendered by stats-render.js into #stats-modal-body.
-   ========================================= */
-
-#stats-modal {
-    display: none;
-    position: absolute;
-    top: 5%; left: 5%; width: 90%; height: 90%;
-    background: #111111;
-    border: 2px solid var(--accent-color);
-    border-radius: 12px;
-    z-index: 300;
-    overflow-y: auto;
-    padding: 2em 1.5em;
-    box-sizing: border-box;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-    color: #ffffff;
-}
-
-#stats-modal h2 {
-    color: var(--accent-color);
-    font-weight: 800;
-    letter-spacing: 1px;
-    border-bottom: 1px solid rgba(255,255,255,0.2);
-    padding-bottom: 0.5em;
-    margin-top: 0;
-}
-
-.stats-section {
-    margin-bottom: 2em;
-}
-
-.stats-section-title {
-    color: #f1c40f;
-    margin-top: 1.5em;
-    margin-bottom: 0.8em;
-}
-
-.stats-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5em 0.2em;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    font-family: monospace;
-    font-size: 0.95em;
-}
-
-.stats-row-label {
-    color: #e0e0e0;
-}
-
-.stats-row-value {
-    color: #2ecc71;
-    font-weight: bold;
-}
-
-.stats-mistake-list {
-    max-height: 320px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6em;
-}
-
-.stats-mistake-row {
+/* legend */
+.chart-legend {
+    flex: 0 0 auto;
     display: flex;
     flex-wrap: wrap;
-    gap: 0.6em;
-    background: #1a1a1a;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 6px;
-    padding: 0.6em 0.8em;
-    font-size: 0.85em;
+    justify-content: center;
+    gap: 0.4em 0.7em;
+    padding-top: 0.1em;
 }
-
-.stats-mistake-time { color: rgba(255,255,255,0.5); }
-.stats-mistake-mode { color: #8e44ad; font-weight: bold; }
-.stats-mistake-hand { color: #ffffff; }
-.stats-mistake-tc { color: #f1c40f; }
-.stats-mistake-you { color: #e74c3c; }
-.stats-mistake-correct { color: #2ecc71; }
-.stats-mistake-empty { color: rgba(255,255,255,0.5); font-style: italic; }
-
-.stats-clear-history-btn {
-    margin-top: 1.5em;
-    background: #e74c3c;
-    color: #ffffff;
-    border: none;
-    border-radius: 20px;
-    padding: 0.6em 1.5em;
-    font-weight: bold;
-    cursor: pointer;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+.chart-legend__item { display: inline-flex; align-items: center; gap: 0.3em; }
+.chart-legend__code {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.35em;
+    padding: 0.05em 0.25em;
+    border-radius: 3px;
+    font-size: 0.62em;
+    font-weight: 800;
 }
+.chart-legend__label { font-size: 0.62em; color: var(--text-lo); }
+
+/* rules panel */
+.chart-rules { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1.2em; }
+.chart-rules__block h4 { margin: 0 0 0.5em; color: var(--gold-strong); font-size: 0.9em; font-weight: 700; }
+.chart-rules__block ul { margin: 0; padding-left: 1.1em; }
+.chart-rules__block li { font-size: 0.82em; line-height: 1.7; color: var(--text-hi); }
+.chart-rules__block strong { color: var(--text-mid); font-weight: 600; }
+.chart-rules__note { margin: 0.8em 0 0; font-size: 0.78em; color: var(--text-mid); font-style: italic; }
+.hilo-tags { display: flex; flex-direction: column; gap: 0.4em; }
+.hilo-row { display: flex; align-items: center; gap: 0.7em; }
+.hilo-val {
+    min-width: 2.2em;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-weight: 800;
+    font-size: 0.8em;
+    padding: 0.2em 0.4em;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--hairline);
+}
+.hilo-plus  { color: var(--win); }
+.hilo-zero  { color: var(--text-mid); }
+.hilo-minus { color: var(--loss); }
+.hilo-cards { font-family: var(--font-mono); font-size: 0.82em; color: var(--text-hi); letter-spacing: 1px; }
+
+/* Action-code legend — retuned toward the palette; still legible/semantic */
+.action-H  { background: #2f7fb8; color: #fff; }   /* hit    */
+.action-S  { background: #2f8f5f; color: #fff; }   /* stand  */
+.action-D  { background: var(--gold); color: #201700; }   /* double */
+.action-Ds { background: var(--gold-deep); color: #fff; } /* double/stand */
+.action-P  { background: #7d54a6; color: #fff; }   /* split  */
+.action-R  { background: #b8474c; color: #fff; }   /* surrender */
+.action-buy{ background: #c07b34; color: #fff; }   /* insurance */
+
+.reference-table-surrender .reference-row-label,
+.reference-table-deviations td:first-child { text-align: left; }
 
 /* =========================================
-   TABLE / DEALER LAYOUT
+   STATS TAB — headline, bars, trend, heatmap, log.
+   All hand-rolled; no chart library (offline/PWA + no bundler).
    ========================================= */
 
-#dealer-cards {
-    display: flex;
-    flex-direction: row;
-    height: 120px;
-    padding-left: 10px;
+.stats-section { margin-bottom: 1.6em; }
+.stats-section-title { color: var(--gold-strong); margin-top: 0.4em; margin-bottom: 0.8em; font-size: 0.95em; }
+.stats-empty { color: var(--text-lo); font-size: 0.8em; font-style: italic; line-height: 1.5; }
+.stats-note { color: var(--text-lo); font-size: 0.7em; margin-top: 0.5em; line-height: 1.4; }
+
+/* headline */
+.stats-headline { display: flex; align-items: baseline; gap: 0.7em; margin-bottom: 1em; }
+.stats-headline__value {
+    font-family: var(--font-display);
+    font-size: 2.1em;
+    font-weight: 700;
+    color: var(--gold);
+    line-height: 1;
 }
-#dealer-cards .playing-card:not(:first-child) {
-    margin-left: -55px;
-    box-shadow: -4px 4px 10px rgba(0,0,0,0.3);
+.stats-headline__note { font-size: 0.75em; color: var(--text-lo); font-family: var(--font-mono); }
+
+/* accuracy-by-category bars */
+.bar-chart { display: flex; flex-direction: column; gap: 0.5em; }
+.bar-row { display: flex; align-items: center; gap: 0.6em; }
+.bar-row__label { flex: 0 0 40%; font-size: 0.74em; color: var(--text-mid); }
+.bar-row__track {
+    flex: 1 1 auto;
+    height: 8px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-pill);
+    overflow: hidden;
+}
+.bar-row__fill { height: 100%; border-radius: var(--r-pill); transition: width 0.4s ease; }
+.bar--good { background: var(--win); }
+.bar--mid  { background: var(--gold); }
+.bar--bad  { background: var(--loss); }
+.bar-row__value {
+    flex: 0 0 auto;
+    min-width: 2.6em;
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 0.72em;
+    font-weight: 700;
+    color: var(--text-hi);
 }
 
-/* Merged .felt-text V1 + OVERRIDE — final gold-watermark values. */
+/* accuracy-over-time trend */
+.trend-wrap {
+    height: 84px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    padding: 6px;
+}
+.trend-chart { width: 100%; height: 100%; display: block; overflow: visible; }
+.trend-grid { stroke: rgba(255, 255, 255, 0.08); stroke-width: 1; }
+.trend-line { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend-area { fill: rgba(227, 193, 111, 0.12); stroke: none; }
+.trend-caption {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5em;
+    margin-top: 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.7em;
+    color: var(--text-mid);
+}
+.trend-delta--up { color: var(--win); }
+.trend-delta--down { color: var(--loss); }
+
+/* mistake heatmap */
+.heatmap-wrap { overflow-x: auto; }
+.heatmap {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-family: var(--font-mono);
+    font-size: clamp(8px, 2.3vw, 11px);
+}
+.heatmap th, .heatmap td {
+    border: 1px solid var(--hairline);
+    text-align: center;
+    padding: 0.32em 0;
+    font-weight: 700;
+    color: var(--text-hi);
+}
+.heatmap thead th { background: var(--surface-3); color: var(--gold); }
+.heatmap__corner { background: transparent; border: none; }
+.heatmap__row-label {
+    background: var(--surface-1);
+    color: var(--text-mid);
+    text-align: left;
+    padding-left: 0.4em;
+    width: 22%;
+    white-space: nowrap;
+}
+.heatmap__cell { background: var(--surface-1); color: transparent; }
+.heatmap__cell--hit { color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.stats-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0.55em 0.2em;
+    border-bottom: 1px solid var(--hairline-soft);
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+}
+.stats-row-label { color: var(--text-mid); }
+.stats-row-value { color: var(--win); font-weight: 700; }
+.stats-mistake-list { max-height: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.6em; }
+.stats-mistake-row {
+    display: flex; flex-wrap: wrap; gap: 0.6em;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+    padding: 0.6em 0.8em;
+    font-size: 0.84em;
+    font-family: var(--font-mono);
+}
+.stats-mistake-time { color: var(--text-lo); }
+.stats-mistake-mode { color: var(--gold); font-weight: 700; }
+.stats-mistake-hand { color: var(--text-hi); }
+.stats-mistake-tc { color: var(--gold-strong); }
+.stats-mistake-you { color: var(--loss); }
+.stats-mistake-correct { color: var(--win); }
+.stats-mistake-empty { color: var(--text-lo); font-style: italic; }
+.stats-clear-history-btn {
+    margin-top: 1.5em;
+    background: transparent;
+    color: var(--loss);
+    border: 1px solid var(--loss);
+    border-radius: var(--r-pill);
+    padding: 0.6em 1.5em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.stats-clear-history-btn:hover { background: rgba(229, 84, 90, 0.12); }
+
+/* (The old #settings-menu dropdown is gone — those controls now live in the
+   hub's Settings tab, styled by `.settings-panel` in §6. Keeping a second
+   copy here would have meant duplicate element ids, which would break
+   ui-bindings.js's getElementById wiring.) */
+
+/* =========================================
+   8. FEEDBACK — banner / toast / felt watermark
+   ========================================= */
+
+/* AP grader toast (slides down from top) */
+#ap-feedback {
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-2);
+    border: 1px solid var(--loss);
+    color: var(--text-hi);
+    padding: 0.7em 1.4em;
+    border-radius: var(--r-pill);
+    font-weight: 700;
+    font-size: 0.86em;
+    letter-spacing: 0.4px;
+    box-shadow: var(--elev-2);
+    transition: top 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 1000;
+    pointer-events: none;
+    white-space: nowrap;
+    max-width: 90vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#ap-feedback.show { top: calc(env(safe-area-inset-top) + 56px); }
+
+/* Big round-outcome banner (opacity/visibility fade, not display swap) */
+#game-message {
+    position: absolute;
+    top: 44%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(12, 12, 14, 0.9);
+    color: var(--text-hi);
+    padding: 0.9em 1.8em;
+    border-radius: var(--r-lg);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.7em;
+    z-index: 100;
+    text-align: center;
+    border: 1px solid var(--gold-line);
+    letter-spacing: 1px;
+    box-shadow: var(--elev-3);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+#game-message.visible { opacity: 1; visibility: visible; transition: opacity 0.3s ease, visibility 0s linear 0s; }
+#game-message.hidden  { opacity: 0; visibility: hidden; }
+
+/* Felt watermark (kept per "keep the fantasy", restyled to gold-on-noir) */
 .felt-text {
     position: absolute;
-    top: 42%;
+    top: 40%;
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
-    color: rgba(241, 196, 15, 0.35);
-    text-shadow: 0 2px 4px rgba(0,0,0,0.6);
-    font-family: 'Times New Roman', serif;
+    color: rgba(227, 193, 111, 0.22);
+    font-family: var(--font-display);
     text-transform: uppercase;
     pointer-events: none;
     user-select: none;
     width: 100%;
+    z-index: 1;
 }
-.felt-text h2 { margin: 0; font-size: 2.2em; letter-spacing: 3px; font-weight: normal; }
-.felt-text p { margin: 5px 0 0 0; font-size: 0.8em; letter-spacing: 1px; font-weight: bold; }
+.felt-text h2 { margin: 0; font-size: 2em; letter-spacing: 4px; font-weight: 600; }
+.felt-text p  { margin: 6px 0 0; font-size: 0.72em; letter-spacing: 2px; font-weight: 500; color: rgba(227,193,111,0.30); }
 
 /* =========================================
-   CONTAINER / VIEWPORT / STATE MACHINE
+   8b. TRAINING OPTIONS / COUNT DRILLS / DISCARD TRAY (Phase 2)
    ========================================= */
 
-#blackjack-container {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    width: 100vw;
-    height: 100%; /* not 100dvh — avoids iOS address-bar reflow stretching */
+/* --- shared option row (drill style, count checks) --- */
+.option-row {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6em;
+    padding: 0.5em 0;
+}
+.option-row__label { font-size: 0.78em; color: var(--text-mid); font-weight: 600; }
+.option-row select,
+#count-interval {
+    background: var(--surface-3);
+    color: var(--text-hi);
+    border: 1px solid var(--gold-line);
+    padding: 5px 8px;
+    border-radius: var(--r-sm);
+    outline: none;
+    font-family: var(--font-ui);
+    font-size: 0.82em;
+}
+
+/* --- config card (Count Checks) --- */
+.config-card {
+    flex: 0 0 auto;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    padding: 1em;
+    margin-top: 0.8em;
+}
+.config-card__title {
+    margin: 0 0 0.35em;
+    font-size: 0.9em;
+    font-weight: 700;
+    color: var(--text-hi);
+    display: flex; align-items: center; gap: 0.5em;
+}
+.config-card__title i { color: var(--gold); }
+.config-card__note { margin: 0 0 0.6em; font-size: 0.76em; color: var(--text-lo); line-height: 1.5; }
+.config-card__note strong { color: var(--gold); font-weight: 700; }
+
+/* the Count tab has only 2 tiles — don't stretch them to full height */
+.tile-grid--short { flex: 0 0 auto; grid-auto-rows: 104px; }
+
+/* --- discard tray: a plain visual stack, no number on it by design.
+   Height of the fill is driven by --tray-fill (render.js / count-drills.js)
+   from RAW card counts, so it grows smoothly and can be eyeballed. --- */
+.discard-tray-wrap {
+    position: absolute;
+    top: 46%;
+    right: 0.8em;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-}
-
-/* State classes render.js applies to #blackjack-container (mirrored by
-   [data-state]) — no state currently needs container-level visual styling
-   beyond what the per-element rules above already handle, but the hooks
-   exist for any future per-state overrides without touching JS. */
-#blackjack-container.state-idle,
-#blackjack-container.state-betting,
-#blackjack-container.state-dealing,
-#blackjack-container.state-player-turn,
-#blackjack-container.state-insurance,
-#blackjack-container.state-dealer-turn,
-#blackjack-container.state-resolving {
-    /* intentionally empty state hooks */
-}
-
-#action-dashboard {
-    flex: 0 0 auto;
-    padding-bottom: max(1.5em, env(safe-area-inset-bottom));
-}
-
-/* Bug #12 fix: buttons are now gated via the native `disabled` attribute
-   (ui-bindings.js's setDisabled), not inline style.opacity/pointerEvents. */
-#action-dashboard button:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+    align-items: center;
+    gap: 0.35em;
+    z-index: 3;
     pointer-events: none;
+}
+.discard-tray {
+    width: 30px;
+    height: 92px;
+    border: 1px solid var(--gold-line);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.4);
+    position: relative;
+    overflow: hidden;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.discard-tray__fill {
+    position: absolute;
+    left: 2px; right: 2px; bottom: 2px;
+    height: var(--tray-fill, 0%);
+    border-radius: 2px;
+    /* stacked-card striping */
+    background: repeating-linear-gradient(0deg, #f2efe6 0 2px, #b9b3a2 2px 3px);
+    transition: height 0.35s ease;
+}
+.discard-tray__label {
+    font-size: 0.52em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-lo);
+}
+
+/* --- count quiz overlay (state 'count-check') --- */
+.count-prompt {
+    display: none;                 /* ui-bindings.js showPanel -> flex */
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8em;
+    background: rgba(12, 12, 14, 0.95);
+    border: 1px solid var(--gold-line);
+    border-radius: var(--r-lg);
+    padding: 1.4em 1.6em;
+    z-index: 150;
+    box-shadow: var(--elev-3);
+    width: max-content;
+    max-width: 92vw;
+}
+.count-prompt__title {
+    margin: 0;
+    font-size: 0.92em;
+    font-weight: 700;
+    color: var(--gold);
+    text-align: center;
+}
+.count-prompt__row { display: flex; gap: 0.5em; align-items: center; }
+
+.cd-input {
+    width: 92px;
+    background: var(--surface-1);
+    border: 1px solid var(--gold-line);
+    border-radius: var(--r-md);
+    color: var(--text-hi);
+    font-family: var(--font-mono);
+    font-size: 1.1em;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.55em 0.5em;
+    outline: none;
+}
+.cd-input:focus { border-color: var(--gold); }
+
+/* --- count drill screen --- */
+#count-drill-container {
+    display: none;                 /* count-drills.js -> flex */
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    height: 100%;
+    flex-direction: column;
+    background:
+        radial-gradient(120% 78% at 50% 30%, var(--felt-glow) 0%, rgba(12,26,20,0.30) 42%, rgba(10,10,12,0) 72%),
+        var(--bg-base);
+    z-index: 220;
+}
+.cd-title {
+    font-family: var(--font-display);
+    font-size: 1em;
+    font-weight: 700;
+    color: var(--gold);
+}
+.cd-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8em;
+}
+.cd-card-slot {
+    height: var(--card-h);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+/* Flash cards skip the deal-in transition entirely: at 3–5 cards/sec a
+   350ms fade would smear into the next card, and .dealt is normally added
+   on the next animation frame (which never arrives if rAF is throttled). */
+.playing-card.cd-flash {
+    transition: none;
+    transition-delay: 0s;
+    opacity: 1;
+    transform: none;
+}
+.cd-progress {
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    color: var(--text-lo);
+    letter-spacing: 1px;
+    min-height: 1.2em;
+}
+.discard-tray-wrap--drill { top: 50%; }
+
+.cd-panel {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.7em;
+    background: var(--surface-1);
+    border-top: 1px solid var(--hairline);
+    padding: 1.2em 1.1em;
+    padding-bottom: max(1.2em, env(safe-area-inset-bottom));
+}
+.cd-blurb {
+    margin: 0;
+    font-size: 0.8em;
+    color: var(--text-mid);
+    text-align: center;
+    line-height: 1.5;
+    max-width: 34em;
+}
+.cd-question { margin: 0; font-size: 1em; font-weight: 700; color: var(--gold); text-align: center; }
+.cd-answer-row { display: flex; gap: 0.5em; align-items: center; }
+.cd-start { min-width: 180px; min-height: 48px; }
+.cd-secondary { background: transparent; border-color: transparent; color: var(--text-lo); font-size: 0.8em; padding: 0.4em; }
+.cd-secondary:hover { color: var(--text-hi); background: transparent; }
+
+.cd-choice { display: flex; align-items: center; justify-content: space-between; gap: 0.8em; width: 100%; max-width: 360px; }
+.cd-choice__label { font-size: 0.78em; color: var(--text-mid); font-weight: 600; }
+
+.cd-deck-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.4em;
+    width: 100%;
+    max-width: 380px;
+}
+.cd-deck-btn { padding: 0.6em 0.2em; font-size: 0.85em; font-family: var(--font-mono); }
+
+.cd-verdict {
+    font-family: var(--font-display);
+    font-size: 1.3em;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+.cd-verdict--ok { color: var(--win); }
+.cd-verdict--bad { color: var(--loss); }
+
+/* =========================================
+   9. SHORT-SCREEN TUNING (e.g. iPhone SE 375x667) — shrink cards so a full
+   deal + dashboard always fits without clipping.
+   ========================================= */
+@media (max-height: 700px) {
+    :root { --card-w: 68px; --card-h: 96px; --card-overlap: -42px; }
+    .felt-text h2 { font-size: 1.6em; }
+    .action-grid #btn-hit, .action-grid #btn-stand { min-height: 52px; font-size: 1.05em; }
+    #table-bet-area { bottom: 104px; }
+    .dashboard { padding-top: 0.8em; padding-bottom: max(0.8em, env(safe-area-inset-bottom)); }
+}
+
+/* =========================================
+   10. DESKTOP COMPANION LAYOUT (>=900px). Portrait phone is the source of
+   truth; this is purely additive CSS (no JS branch). The table reserves the
+   right edge for a companion rail whose content is future work (multi-hand
+   counting drill, multi-hand play) — the shell is built to receive it.
+   ========================================= */
+@media (min-width: 900px) {
+    :root { --card-w: 96px; --card-h: 134px; --card-overlap: -58px; }
+
+    /* Reserve the right 340px for the companion rail; center the game in the
+       remaining space. Container is position:fixed inset:0 — narrow it. */
+    /* The game AND the hub both stop short of the reserved rail. */
+    #blackjack-container { right: 340px; }
+    #main-menu { width: calc(100vw - 340px); }
+
+    .zone { max-width: 620px; width: 100%; margin: 0 auto; }
+    .topbar, .dashboard { max-width: 620px; margin-left: auto; margin-right: auto; width: 100%; }
+    .dashboard { border-left: 1px solid var(--hairline); border-right: 1px solid var(--hairline); }
+
+    /* Hub gets comfortable centred width + a roomier tile grid */
+    .hub__top, .hub__body, .hub__cta { max-width: 620px; width: 100%; margin-left: auto; margin-right: auto; }
+    .hub__nav { padding-left: 12%; padding-right: 12%; }
+    .tile-grid { grid-template-columns: repeat(3, 1fr); }
+
+    /* Modals get comfortable and centered within the game area, not the rail */
+    .modal-sheet { max-width: 640px; }
+}
+
+/* The companion rail — hidden on phone, shown on desktop */
+#desktop-rail {
+    display: none;
+    position: fixed;
+    top: 0; right: 0;
+    width: 340px;
+    height: 100%;
+    flex-direction: column;
+    gap: 1em;
+    padding: 1.6em 1.3em max(1.6em, env(safe-area-inset-bottom));
+    background: var(--surface-1);
+    border-left: 1px solid var(--gold-line);
+    box-shadow: -20px 0 50px rgba(0, 0, 0, 0.4);
+    z-index: 40;
+    overflow-y: auto;
+}
+.rail-title {
+    font-family: var(--font-display);
+    color: var(--gold);
+    font-size: 1.2em;
+    font-weight: 700;
+    margin: 0 0 0.2em;
+}
+.rail-sub { color: var(--text-mid); font-size: 0.82em; margin: 0 0 1.4em; line-height: 1.5; }
+.rail-card {
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    padding: 1.1em;
+}
+.rail-card h4 {
+    margin: 0 0 0.4em;
+    color: var(--text-hi);
+    font-size: 0.95em;
+    font-weight: 700;
+    display: flex; align-items: center; gap: 0.5em;
+}
+.rail-card p { margin: 0; color: var(--text-lo); font-size: 0.82em; line-height: 1.5; }
+.rail-card__soon {
+    display: inline-block;
+    margin-top: 0.7em;
+    font-size: 0.66em;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--gold);
+    border: 1px solid var(--gold-line);
+    border-radius: var(--r-pill);
+    padding: 0.2em 0.7em;
+}
+
+/* Reveal the rail on desktop. Kept AFTER the base `#desktop-rail { display:
+   none }` so this equal-specificity rule wins by source order. */
+@media (min-width: 900px) {
+    #desktop-rail { display: flex; }
 }

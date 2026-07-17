@@ -181,27 +181,51 @@
             this.currentBet = 0;
             this.insuranceBet = 0;
             this.state = 'idle';
+
+            // Periodic count-quiz bookkeeping (settings.countPrompt).
+            this.handsSinceCountPrompt = 0;
+            this._pendingCountPrompt = null;
+
+            // Per-event subscriber lists. This is a MULTI-subscriber bus:
+            // render.js (visuals) and ui-bindings.js (panels/audio/readouts)
+            // both subscribe to the SAME events (onCardDealt, onStateChange,
+            // onHandsUpdate, onRoundResolved, onGameModeChange, onShuffle, …)
+            // and are BOTH meant to run. `setCallback` therefore APPENDS a
+            // listener rather than overwriting — otherwise whichever module
+            // wires up last silently clobbers the other's handler for every
+            // shared event (which previously killed all card rendering).
+            this._listeners = {};
         }
 
         // --- callback wiring -------------------------------------------------
 
         setCallback(name, fn) {
-            this.callbacks[name] = fn;
+            if (typeof fn !== 'function') return;
+            (this._listeners[name] || (this._listeners[name] = [])).push(fn);
         }
 
         setCallbacks(map) {
-            Object.assign(this.callbacks, map || {});
+            map = map || {};
+            for (var name in map) {
+                if (Object.prototype.hasOwnProperty.call(map, name)) this.setCallback(name, map[name]);
+            }
         }
 
         _emit(name) {
-            const fn = this.callbacks[name];
-            if (typeof fn !== 'function') return;
             const args = Array.prototype.slice.call(arguments, 1);
-            try {
-                fn.apply(null, args);
-            } catch (err) {
-                if (typeof console !== 'undefined') console.error('BJ.GameManager callback "' + name + '" threw:', err);
-            }
+            const invoke = (fn) => {
+                if (typeof fn !== 'function') return;
+                try {
+                    fn.apply(null, args);
+                } catch (err) {
+                    if (typeof console !== 'undefined') console.error('BJ.GameManager callback "' + name + '" threw:', err);
+                }
+            };
+            // Constructor-supplied single callbacks (back-compat) first…
+            invoke(this.callbacks[name]);
+            // …then every subscriber added via setCallback/setCallbacks.
+            const list = this._listeners[name];
+            if (list) for (let i = 0; i < list.length; i++) invoke(list[i]);
         }
 
         // --- public read accessors -------------------------------------------
@@ -227,7 +251,17 @@
         _countSnapshot() {
             const decksRemaining = Count.getDecksRemaining(this.shoe);
             const trueCount = Count.getTrueCount(Count.runningCount, decksRemaining);
-            return { runningCount: Count.runningCount, trueCount, decksRemaining };
+            return {
+                runningCount: Count.runningCount,
+                trueCount,
+                decksRemaining,
+                // Raw card counts (NOT the half-deck-rounded `decksRemaining`)
+                // so the discard tray can grow smoothly and stay genuinely
+                // eyeball-able — a tray that snapped in half-deck steps would
+                // be a readout, not an estimation aid.
+                cardsRemaining: this.shoe.cards.length,
+                cardsTotal: Rules.decks * 52
+            };
         }
 
         // --- settings / mode / betting ----------------------------------------
@@ -249,6 +283,19 @@
         }
 
         /**
+         * True while the table is staged for a bet but no cards are out —
+         * i.e. every state in which the bet controls are on screen (see
+         * ui-bindings.js's `applyStatePanels`, which shows them for BOTH
+         * 'betting' and the post-round 'idle'). setBet/clearBet MUST share
+         * this one guard: when they disagreed, chips could be added in
+         * 'idle' (bankroll debited) but never withdrawn, because clearBet
+         * alone required 'betting'.
+         */
+        _isPreDeal() {
+            return this.state === 'betting' || this.state === 'idle';
+        }
+
+        /**
          * Adds `amount` to the current bet (testout mode only — drills never
          * bet). Deducts from bankroll immediately, mirroring the old "chip
          * throw" behavior, unless freeplay is on. Pass `{replace: true}` to
@@ -265,6 +312,8 @@
                 return this.currentBet;
             }
 
+            if (!this._isPreDeal()) return this.currentBet;
+
             if (!this.settings.freeplay && this.bankroll < amount) {
                 this._emit('onFeedback', 'Not enough Bankroll!', 1500);
                 return this.currentBet;
@@ -280,7 +329,7 @@
 
         /** Pulls the current bet back to the bankroll (pre-deal only). */
         clearBet() {
-            if (this.currentBet > 0 && this.state === 'betting') {
+            if (this.currentBet > 0 && this._isPreDeal()) {
                 if (!this.settings.freeplay) {
                     this.bankroll += this.currentBet;
                     this._persistBankroll();
@@ -310,6 +359,94 @@
 
         _drawFromShoe() {
             return this.shoe.draw();
+        }
+
+        // --- periodic count quiz ------------------------------------------------
+
+        /**
+         * Called at the end of every resolved round. If the player has the
+         * count quiz enabled, every Nth hand parks the game in a
+         * 'count-check' state and asks for the count instead of dealing on.
+         *
+         * The expected answer is captured HERE, at prompt time, not when the
+         * player answers: `_resolveRound` reshuffles immediately after this
+         * returns whenever the cut card is out, and a reshuffle zeroes
+         * Count.runningCount — grading lazily would then compare the
+         * player's (correct) answer against a fresh 0.
+         *
+         * @returns {boolean} true if a prompt was raised.
+         */
+        _maybePromptCount() {
+            if (this.gameMode !== 'testout') return false;
+            if (this.settings.casualMode) return false;
+
+            const type = this.settings.countPrompt;
+            if (type !== 'running' && type !== 'true') return false;
+
+            const interval = Math.max(1, this.settings.countPromptInterval || 3);
+            this.handsSinceCountPrompt++;
+            if (this.handsSinceCountPrompt < interval) return false;
+            this.handsSinceCountPrompt = 0;
+
+            const decksRemaining = Count.getDecksRemaining(this.shoe);
+            this._pendingCountPrompt = {
+                type,
+                expected: type === 'true'
+                    ? Count.getTrueCount(Count.runningCount, decksRemaining)
+                    : Count.runningCount,
+                decksRemaining
+            };
+
+            this.state = 'count-check';
+            this._emit('onStateChange', this.state);
+            this._emit('onCountPrompt', { type, decksRemaining });
+            return true;
+        }
+
+        /**
+         * Grades the player's answer to a pending count quiz and returns the
+         * game to 'idle'. No-ops (returns null) if nothing is pending.
+         */
+        submitCountAnswer(value) {
+            const pending = this._pendingCountPrompt;
+            if (!pending) return null;
+            this._pendingCountPrompt = null;
+
+            const given = Number(value);
+            const correct = Number.isFinite(given) && given === pending.expected;
+            const mode = pending.type === 'true' ? 'count-true' : 'count-running';
+
+            this._recordDecision(mode, correct);
+
+            if (!correct) {
+                this._logMistake({
+                    mode,
+                    descriptionOverride: (pending.type === 'true' ? 'True count check' : 'Running count check'),
+                    dealerUpcard: null,
+                    trueCount: pending.type === 'true' ? pending.expected : null,
+                    playerAction: String(given),
+                    optimalPlay: String(pending.expected)
+                });
+                this._emit('onFeedback', 'Count was ' + pending.expected + ', you said ' + given, 3000);
+            } else {
+                this._emit('onFeedback', 'Count correct: ' + pending.expected, 1600);
+            }
+
+            this.state = 'idle';
+            this._emit('onStateChange', this.state);
+            this._emit('onCountPromptResolved', { correct, expected: pending.expected, given });
+
+            return { correct, expected: pending.expected, given };
+        }
+
+        /**
+         * Public hook for the standalone count drills (count-drills.js).
+         * They run entirely outside the round lifecycle — their own shoe,
+         * their own local tally — but still feed session/lifetime stats, and
+         * `_recordDecision` is the single place that knows how to do that.
+         */
+        recordDrillResult(mode, correct) {
+            this._recordDecision(mode, !!correct);
         }
 
         // --- card fabrication helpers --------------------------------------------
@@ -364,9 +501,63 @@
             return [this._card(7, 0), this._card(5, 1)]; // defensive fallback, should be unreachable
         }
 
+        /**
+         * A specific soft total (Ace + kicker). `_fabricateSoft()` picks its
+         * total at random; Targeted Practice needs to re-serve the exact
+         * total that was missed. Clamped to the reachable 13-20 range
+         * (A,2 .. A,9).
+         */
+        _fabricateSoftTotal(total) {
+            const kicker = Math.max(2, Math.min(9, (total || 0) - 11));
+            return [this._card(11, 0), this._card(kicker, 1)];
+        }
+
+        /**
+         * A specific pair (e.g. 8,8 or A,A). `value` is the CARD value, the
+         * same key StrategyData.pair uses — 11 for aces.
+         */
+        _fabricatePairOf(value) {
+            const v = Math.max(2, Math.min(11, value || 2));
+            return [this._card(v, 0), this._card(v, 1)];
+        }
+
         _fabricateDealerUpcard(fixedValue) {
             const value = fixedValue != null ? fixedValue : this._randomInt(2, 11);
             return this._card(value, 2);
+        }
+
+        /**
+         * Picks one logged mistake to re-serve, weighted by how often that
+         * exact hand/dealer combo has been missed — so your worst cells come
+         * up most. Only entries carrying structured hand fields are
+         * eligible (count-check mistakes have no hand to replay).
+         *
+         * @returns {{handType, handTotal, dealerUpcard}|null} null when
+         *   there's nothing logged yet, which the caller treats as "fall
+         *   back to a random hard total" rather than an error.
+         */
+        _pickTargetedScenario() {
+            const log = Storage.getMistakeLog().filter((e) =>
+                e && e.handType && e.handTotal != null && e.dealerUpcard != null);
+            if (!log.length) return null;
+
+            // Tally identical combos; each repeat adds weight.
+            const buckets = new Map();
+            log.forEach((e) => {
+                const key = e.handType + '_' + e.handTotal + '_' + e.dealerUpcard;
+                const existing = buckets.get(key);
+                if (existing) existing.weight++;
+                else buckets.set(key, { handType: e.handType, handTotal: e.handTotal, dealerUpcard: e.dealerUpcard, weight: 1 });
+            });
+
+            const combos = Array.from(buckets.values());
+            const totalWeight = combos.reduce((sum, c) => sum + c.weight, 0);
+            let roll = Math.random() * totalWeight;
+            for (let i = 0; i < combos.length; i++) {
+                roll -= combos[i].weight;
+                if (roll <= 0) return combos[i];
+            }
+            return combos[combos.length - 1]; // float-rounding safety net
         }
 
         // --- dealing --------------------------------------------------------------
@@ -447,6 +638,20 @@
                 const scenario = pool[this._randomInt(0, pool.length - 1)];
                 [p1, p2] = this._fabricateHardTotal(scenario.total);
                 dUp = this._fabricateDealerUpcard(scenario.dealer);
+            } else if (this.gameMode === 'targeted') {
+                // Re-serve a hand you've actually missed, weighted by how
+                // often. With an empty mistake log there's nothing to target,
+                // so fall back to a plain random hard total rather than
+                // dealing nothing (the UI also gates the tile on this).
+                const scenario = this._pickTargetedScenario();
+                if (scenario) {
+                    if (scenario.handType === 'pair') [p1, p2] = this._fabricatePairOf(scenario.handTotal);
+                    else if (scenario.handType === 'soft') [p1, p2] = this._fabricateSoftTotal(scenario.handTotal);
+                    else [p1, p2] = this._fabricateHardTotal(scenario.handTotal);
+                    dUp = this._fabricateDealerUpcard(scenario.dealerUpcard);
+                } else {
+                    [p1, p2] = this._fabricateHardTotal(this._randomInt(5, 20));
+                }
             }
 
             this._addCardToHand(this.playerHands[0], p1, { isPlayer: true });
@@ -589,11 +794,38 @@
             return this.bankroll >= bet;
         }
 
+        /**
+         * Does the current mode play a hand out to resolution (draw cards,
+         * dealer turn, payout), or is it flash-card style (one graded
+         * decision, then straight to the next fabricated hand)?
+         *
+         * 'testout' (the full-play session) always plays out. A drill plays
+         * out only under the 'full' drill style — which is the whole point
+         * of that setting: practising a hand to completion (drawing 1+
+         * cards) rather than judging a single opening decision.
+         */
+        _playsOutHand() {
+            return this.gameMode === 'testout' || this.settings.drillStyle === 'full';
+        }
+
+        /**
+         * Only the full-play session moves real money. A 'full'-style drill
+         * plays a hand out mechanically but must never touch the bankroll
+         * (its hands are fabricated with bet = 0 anyway; this guard keeps
+         * that explicit rather than incidental).
+         */
+        _isMoneyMode() {
+            return this.gameMode === 'testout' && !this.settings.freeplay;
+        }
+
         _canSurrender(hand) {
             return Rules.lateSurrender
                 && !!hand && hand.cards.length === 2 && !hand.surrendered && !hand.resolved
                 && this.playerHands.length === 1 // never after a split
-                && (this.gameMode === 'testout' || this.gameMode === 'hard' || this.gameMode === 'surrender');
+                // 'targeted' re-serves whatever you missed, including hands
+                // whose correct play IS surrender — so it must offer it.
+                && (this.gameMode === 'testout' || this.gameMode === 'hard'
+                    || this.gameMode === 'surrender' || this.gameMode === 'targeted');
         }
 
         _resetForNextDrill() {
@@ -613,7 +845,12 @@
          * @returns {{correct:boolean, optimalPlay:string}|null}
          */
         _evaluatePlay(actionCode, hand) {
-            if (this.settings.casualMode) return null;
+            // Casual mode is scoped to the full-play ('testout') session — it
+            // is the "just deal me cards, no consequences" toggle on the hub's
+            // Play button. It must NOT silence the drills: grading is the
+            // entire point of a drill, so a casual Play session followed by a
+            // drill would otherwise train nothing.
+            if (this.settings.casualMode && this.gameMode === 'testout') return null;
             if (!hand || hand.resolved || hand.score.isBust) return null;
             if (this.state !== 'player-turn') return null;
 
@@ -662,6 +899,9 @@
             Storage.setSessionStats(this.sessionStats);
             Storage.setLifetimeStats(this.lifetimeStats);
 
+            // Raw per-decision point for the accuracy-over-time trend.
+            Storage.pushDecision({ t: Date.now(), correct: !!correct, mode });
+
             const modeStats = this.sessionStats.byMode[mode];
             const sessionAccuracy = modeStats.total > 0 ? Math.round((modeStats.correct / modeStats.total) * 100) : null;
             this._emit('onStatsUpdate', { session: this.sessionStats, lifetime: this.lifetimeStats, sessionAccuracy, mode });
@@ -676,11 +916,37 @@
             return 'Hard ' + hand.score.total;
         }
 
+        /**
+         * The machine-readable twin of `_describeHand`. Logged alongside the
+         * human string so the mistake heatmap and the Targeted Practice
+         * drill can key off real values instead of regex-parsing a display
+         * label (which would silently break the moment the wording changes).
+         *
+         * `total` for a pair is the CARD value (8 for 8,8; 11 for A,A) —
+         * matching how StrategyData.pair is keyed — not the hand total.
+         */
+        _classifyHand(hand) {
+            if (hand.isPair) {
+                return { handType: 'pair', handTotal: hand.cards[0].value };
+            }
+            if (hand.isSoft && hand.cards.length === 2) {
+                return { handType: 'soft', handTotal: hand.score.total };
+            }
+            return { handType: 'hard', handTotal: hand.score.total };
+        }
+
         _logMistake(details) {
+            // Structured hand fields only exist for real hands — a count-check
+            // mistake (descriptionOverride, no hand) has nothing to classify,
+            // and the heatmap/targeted drill both skip entries without them.
+            const classified = details.hand ? this._classifyHand(details.hand) : {};
+
             const entry = {
                 timestamp: Date.now(),
                 mode: details.mode,
                 handDescription: details.descriptionOverride || this._describeHand(details.hand),
+                handType: classified.handType || null,
+                handTotal: classified.handTotal != null ? classified.handTotal : null,
                 dealerUpcard: details.dealerUpcard,
                 // True count is only meaningful to log for modes where it
                 // actually drives the correct answer (index plays / the
@@ -701,7 +967,7 @@
             if (!hand || hand.resolved) return null;
             const grade = this._evaluatePlay('H', hand);
 
-            if (this.gameMode === 'testout') {
+            if (this._playsOutHand()) {
                 const card = this._drawFromShoe();
                 this._addCardToHand(hand, card, { isPlayer: true });
                 if (hand.score.isBust) {
@@ -721,7 +987,7 @@
             if (!hand || hand.resolved) return null;
             const grade = this._evaluatePlay('S', hand);
 
-            if (this.gameMode === 'testout') {
+            if (this._playsOutHand()) {
                 hand.resolved = true;
                 this._advanceHand();
             } else {
@@ -735,15 +1001,15 @@
             if (!hand || hand.resolved) return null;
             const grade = this._evaluatePlay('D', hand);
 
-            if (this.gameMode === 'testout') {
+            if (this._playsOutHand()) {
                 if (hand.cards.length === 2 && this._hasFunds(hand.bet)) {
-                    if (!this.settings.freeplay) {
+                    if (this._isMoneyMode()) {
                         this.bankroll -= hand.bet;
                         this._persistBankroll();
                     }
-                    hand.bet *= 2;
+                    hand.bet *= 2; // drills fabricate hands with bet 0 — a no-op there
                     hand.hasDoubled = true;
-                    if (this.playerHands.length === 1) {
+                    if (this.gameMode === 'testout' && this.playerHands.length === 1) {
                         this.currentBet = hand.bet;
                         this._emit('onBetChange', this.currentBet);
                     }
@@ -765,12 +1031,12 @@
             if (!hand || hand.resolved) return null;
             const grade = this._evaluatePlay('P', hand);
 
-            if (this.gameMode === 'testout') {
+            if (this._playsOutHand()) {
                 const canSplit = hand.cards.length === 2 && hand.isPair
                     && this.playerHands.length < 4 && this._hasFunds(hand.bet);
 
                 if (canSplit) {
-                    if (!this.settings.freeplay) {
+                    if (this._isMoneyMode()) {
                         this.bankroll -= hand.bet;
                         this._persistBankroll();
                     }
@@ -818,7 +1084,7 @@
 
             if (!this._canSurrender(hand)) {
                 this._emit('onFeedback', 'Surrender not available', 1500);
-                if (this.gameMode !== 'testout') this._resetForNextDrill();
+                if (!this._playsOutHand()) this._resetForNextDrill();
                 return grade;
             }
 
@@ -827,7 +1093,7 @@
             hand.payout = -hand.bet / 2;
             hand.resolved = true;
 
-            if (this.gameMode === 'testout') {
+            if (this._playsOutHand()) {
                 this._advanceHand();
             } else {
                 this._resetForNextDrill();
@@ -919,6 +1185,7 @@
             this.insuranceBet = 0;
             this._emit('onBetChange', 0);
 
+            this._maybePromptCount();          // must precede the reshuffle
             if (this.shoe.needsShuffle) this._reshuffle();
         }
 
@@ -981,6 +1248,7 @@
             this.insuranceBet = 0;
             this._emit('onBetChange', 0);
 
+            this._maybePromptCount();          // must precede the reshuffle
             if (this.shoe.needsShuffle) this._reshuffle();
         }
 

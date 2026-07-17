@@ -76,6 +76,7 @@
         btnModeDeviations: byId('btn-mode-deviations'),
         btnModeHard: byId('btn-mode-hard'),           // NEW — drill mode §3.3
         btnModeSurrender: byId('btn-mode-surrender'), // NEW — drill mode §3.3
+        btnModeTargeted: byId('btn-mode-targeted'),   // NEW — Phase 3, drills your logged misses
 
         // reference modal (bug #11 — content rendered by reference-render.js)
         referenceModal: byId('reference-modal'),
@@ -101,6 +102,13 @@
         playerCards: byId('player-cards'),
         dealerScore: byId('dealer-score'),
         playerScore: byId('player-score'),
+        discardTray: byId('discard-tray'),          // NEW — deck-estimation aid
+
+        // count quiz overlay (NEW — settings.countPrompt)
+        countPrompt: byId('count-prompt'),
+        countPromptTitle: byId('count-prompt-title'),
+        countPromptInput: byId('count-prompt-input'),
+        countPromptSubmit: byId('count-prompt-submit'),
 
         // action dashboard
         btnDeal: byId('btn-deal'),
@@ -153,9 +161,27 @@
         }
     }
 
-    function renderCount(countInfo) {
+    // Last count payload, kept so the readout can be re-rendered when the
+    // settings change (e.g. toggling the TC quiz on/off) without waiting for
+    // the next card.
+    var lastCountInfo = { runningCount: 0, trueCount: 0, decksRemaining: 6 };
+
+    /**
+     * `settings.countPrompt === 'true'` means the player is being quizzed on
+     * the TRUE count — so showing it here would hand them the answer, and
+     * would also remove any need to estimate the decks remaining. Mask it.
+     */
+    function renderCount(countInfo, settings) {
+        if (countInfo) lastCountInfo = countInfo;
         if (!UI.uiTrueCount) return;
-        var tc = countInfo.trueCount;
+
+        if (settings && settings.countPrompt === 'true') {
+            UI.uiTrueCount.textContent = '??';
+            UI.uiTrueCount.style.color = 'var(--text-lo)';
+            return;
+        }
+
+        var tc = lastCountInfo.trueCount;
         UI.uiTrueCount.textContent = tc > 0 ? ('+' + tc) : String(tc);
         UI.uiTrueCount.style.color = tc >= 2 ? '#2ecc71' : (tc <= -1 ? '#e74c3c' : '#f1c40f');
     }
@@ -228,9 +254,12 @@
     }
 
     function applyStatePanels(state) {
+        // 'count-check' parks the game between hands to ask for the count —
+        // no betting or actions until it's answered.
         showPanel(UI.betControls, state === 'betting' || state === 'idle');
         showPanel(UI.gameControls, state === 'player-turn');
         showPanel(UI.insuranceControls, state === 'insurance');
+        showPanel(UI.countPrompt, state === 'count-check');
     }
 
     // ------------------------------------------------------------------
@@ -244,8 +273,11 @@
         // ---------------- GameManager -> plain display / panel wiring ----------------
         gm.setCallback('onBankrollChange', function () { renderFinance(gm); });
         gm.setCallback('onBetChange', function (bet) { renderFinance(gm); renderBetBubble(bet); });
-        gm.setCallback('onCountChange', function (info) { renderCount(info); });
+        gm.setCallback('onCountChange', function (info) { renderCount(info, gm.getSettings()); });
         gm.setCallback('onStatsUpdate', function (payload) { renderSessionStats(payload); });
+        // Re-mask/unmask the TC readout the moment the quiz setting changes,
+        // rather than leaving a stale value until the next card is dealt.
+        gm.setCallback('onSettingsChange', function (settings) { renderCount(null, settings); });
         gm.setCallback('onStateChange', function (state) {
             applyStatePanels(state);
             refreshActionButtons(gm);
@@ -290,6 +322,7 @@
         if (UI.btnModeDeviations) UI.btnModeDeviations.addEventListener('click', function () { goToMode('deviations'); });
         if (UI.btnModeHard) UI.btnModeHard.addEventListener('click', function () { goToMode('hard'); });
         if (UI.btnModeSurrender) UI.btnModeSurrender.addEventListener('click', function () { goToMode('surrender'); });
+        if (UI.btnModeTargeted) UI.btnModeTargeted.addEventListener('click', function () { goToMode('targeted'); });
 
         if (UI.btnReturnMenu) {
             UI.btnReturnMenu.addEventListener('click', function () {
@@ -356,8 +389,11 @@
         }
 
         // ---------------- reference modal ----------------
+        // 'flex' (not 'block'): the strategy charts size themselves to FILL
+        // the sheet so neither axis scrolls, which needs a flex column
+        // context — see reference-render.js's layout contract.
         if (UI.btnOpenReference && UI.referenceModal) {
-            UI.btnOpenReference.addEventListener('click', function () { UI.referenceModal.style.display = 'block'; });
+            UI.btnOpenReference.addEventListener('click', function () { UI.referenceModal.style.display = 'flex'; });
         }
         if (UI.btnCloseReference && UI.referenceModal) {
             UI.btnCloseReference.addEventListener('click', function () { UI.referenceModal.style.display = 'none'; });
@@ -392,6 +428,32 @@
         // ---------------- insurance ----------------
         if (UI.btnBuyInsurance) UI.btnBuyInsurance.addEventListener('click', function () { gm.handleInsurance(true); });
         if (UI.btnPassInsurance) UI.btnPassInsurance.addEventListener('click', function () { gm.handleInsurance(false); });
+
+        // ---------------- periodic count quiz ----------------
+        gm.setCallback('onCountPrompt', function (info) {
+            if (UI.countPromptTitle) {
+                UI.countPromptTitle.textContent = info.type === 'true'
+                    ? 'What is the TRUE count?'
+                    : 'What is the RUNNING count?';
+            }
+            if (UI.countPromptInput) {
+                UI.countPromptInput.value = '';
+                UI.countPromptInput.focus();
+            }
+        });
+
+        function submitCount() {
+            if (!UI.countPromptInput) return;
+            var raw = UI.countPromptInput.value.trim();
+            if (raw === '' || !Number.isFinite(Number(raw))) return; // ignore empty/garbage
+            gm.submitCountAnswer(Number(raw));
+        }
+        if (UI.countPromptSubmit) UI.countPromptSubmit.addEventListener('click', submitCount);
+        if (UI.countPromptInput) {
+            UI.countPromptInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') submitCount();
+            });
+        }
 
         // ---------------- betting chips ----------------
         if (UI.chipBtns && UI.chipBtns.forEach) {

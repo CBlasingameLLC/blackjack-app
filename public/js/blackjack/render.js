@@ -43,7 +43,7 @@
         ? (window.BJ = window.BJ || {})
         : (root.BJ = root.BJ || {});
 
-    var STATE_TOKENS = ['idle', 'betting', 'dealing', 'player-turn', 'insurance', 'dealer-turn', 'resolving'];
+    var STATE_TOKENS = ['idle', 'betting', 'dealing', 'player-turn', 'insurance', 'dealer-turn', 'resolving', 'count-check'];
 
     var RANK_NAMES = { A: 'Ace', J: 'Jack', Q: 'Queen', K: 'King' };
     var SUIT_NAMES = { '♠': 'Spades', '♥': 'Hearts', '♣': 'Clubs', '♦': 'Diamonds' };
@@ -54,6 +54,40 @@
     // Bug #12 fix: accessible name for a rendered card, e.g. "King of Hearts".
     function cardLabel(card) {
         return rankName(card.rank) + ' of ' + suitName(card.suit);
+    }
+
+    /**
+     * Builds one card element: `.playing-card > .card-inner > (.card-front +
+     * .card-back)`. The two-sided structure is what lets CSS rotateY the
+     * dealer hole card; `hidden` starts it flipped to the back face.
+     *
+     * Module-level (and exposed as BJ.buildCardEl) so the standalone count
+     * drills can render real cards without duplicating this markup — the
+     * Renderer method below just delegates here.
+     */
+    function buildCardEl(card, hidden) {
+        var el = document.createElement('div');
+        el.className = 'playing-card ' + (card.color || '') + (hidden ? ' face-down' : '');
+        el.setAttribute('role', 'group');
+        el.setAttribute('aria-label', hidden ? 'Hidden card' : cardLabel(card));
+
+        var inner = document.createElement('div');
+        inner.className = 'card-inner';
+
+        var front = document.createElement('div');
+        front.className = 'card-face card-front';
+        front.innerHTML =
+            '<div class="card-top">' + card.rank + '<br>' + card.suit + '</div>' +
+            '<div class="card-middle">' + card.suit + '</div>' +
+            '<div class="card-bottom">' + card.rank + '<br>' + card.suit + '</div>';
+
+        var back = document.createElement('div');
+        back.className = 'card-face card-back';
+
+        inner.appendChild(front);
+        inner.appendChild(back);
+        el.appendChild(inner);
+        return el;
     }
 
     // Two rAFs (not one): a single requestAnimationFrame sometimes lands in
@@ -101,7 +135,7 @@
             var names = [
                 'onStateChange', 'onGameModeChange', 'onCardDealt', 'onDealerCardDealt',
                 'onHoleCardRevealed', 'onHandsUpdate', 'onRoundResolved', 'onFeedback',
-                'onInsuranceResolved', 'onSettingsChange', 'onShuffle'
+                'onInsuranceResolved', 'onSettingsChange', 'onShuffle', 'onCountChange'
             ];
             names.forEach(function (name) {
                 if (typeof self[name] === 'function') {
@@ -157,6 +191,18 @@
             if (this.ui.playerCards) this.ui.playerCards.innerHTML = '';
             if (this.ui.chipStack) this.ui.chipStack.innerHTML = '';
             if (this.ui.insuranceStack) this.ui.insuranceStack.innerHTML = '';
+
+            // The per-hand `.hand-score-badge`s die with the innerHTML wipe
+            // above (they live inside .hand-column), but #dealer-score and
+            // #player-score are STANDALONE siblings outside those containers
+            // — nothing else ever resets them, so a stale total stayed on
+            // screen across mode switches. Hide + blank them explicitly.
+            [this.ui.dealerScore, this.ui.playerScore].forEach(function (el) {
+                if (!el) return;
+                el.textContent = '';
+                el.style.opacity = 0;
+            });
+
             this.handColumns.clear();
             this.dealerHoleEl = null;
             this._hideBanner();
@@ -181,28 +227,7 @@
          * screen readers before the reveal.
          */
         _buildCardEl(card, hidden) {
-            var el = document.createElement('div');
-            el.className = 'playing-card ' + (card.color || '') + (hidden ? ' face-down' : '');
-            el.setAttribute('role', 'group');
-            el.setAttribute('aria-label', hidden ? 'Hidden card' : cardLabel(card));
-
-            var inner = document.createElement('div');
-            inner.className = 'card-inner';
-
-            var front = document.createElement('div');
-            front.className = 'card-face card-front';
-            front.innerHTML =
-                '<div class="card-top">' + card.rank + '<br>' + card.suit + '</div>' +
-                '<div class="card-middle">' + card.suit + '</div>' +
-                '<div class="card-bottom">' + card.rank + '<br>' + card.suit + '</div>';
-
-            var back = document.createElement('div');
-            back.className = 'card-face card-back';
-
-            inner.appendChild(front);
-            inner.appendChild(back);
-            el.appendChild(inner);
-            return el;
+            return buildCardEl(card, hidden);
         }
 
         /**
@@ -579,9 +604,25 @@
         onShuffle() {
             this.onFeedback('Shuffling Shoe...', 1500);
         }
+
+        /**
+         * Grows the discard tray as the shoe depletes. Driven off the RAW
+         * card counts, not the half-deck-rounded `decksRemaining` — the
+         * whole point of the tray is to be eyeballed and estimated, so it
+         * must move smoothly rather than snap in half-deck steps (which
+         * would turn it into a readout and defeat the exercise).
+         */
+        onCountChange(info) {
+            var tray = this.ui.discardTray;
+            if (!tray || !info || !info.cardsTotal) return;
+            var dealt = Math.max(0, info.cardsTotal - info.cardsRemaining);
+            var frac = Math.max(0, Math.min(1, dealt / info.cardsTotal));
+            tray.style.setProperty('--tray-fill', (frac * 100).toFixed(2) + '%');
+        }
     }
 
     BJ.Renderer = Renderer;
+    BJ.buildCardEl = buildCardEl;   // shared with count-drills.js
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = Renderer;
