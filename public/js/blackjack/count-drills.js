@@ -1,9 +1,14 @@
 // ==========================================
-// count-drills.js — the two standalone counting drills (Count tab):
+// count-drills.js — the three standalone counting drills (Count tab):
 //
 //   'speed'      — flash N cards at a set rate, then ask for the running count.
 //   'estimation' — bury a random slice of the shoe, show the discard tray,
 //                  then ask how many decks remain (graded to ±0.5).
+//   'truecount'  — flash N cards (same as 'speed'), but the ask at the end is
+//                  the TRUE count: player must combine their own running
+//                  count with an eyeballed read of the (still-visible)
+//                  discard tray and do the RC÷decks conversion themselves
+//                  (graded to ±1 — see TC_TOLERANCE).
 //
 // These live OUTSIDE the round lifecycle: no dealer, no hands, no bets, no
 // GameManager state machine. They own their own Shoe and tally their own
@@ -42,9 +47,10 @@
         { label: 'Brutal (5/s)', value: 5 }
     ];
     var DECK_TOLERANCE = 0.5; // half-deck accuracy is the real-world standard
+    var TC_TOLERANCE = 1;     // true count is a rounded conversion of an eyeballed deck estimate — ±1 is the fair bar
 
     var state = {
-        drill: null,        // 'speed' | 'estimation'
+        drill: null,        // 'speed' | 'estimation' | 'truecount'
         phase: 'setup',     // 'setup' | 'running' | 'answer' | 'result'
         shoe: null,
         localCount: 0,
@@ -96,8 +102,10 @@
         if (!p) return;
         p.innerHTML = '';
 
-        if (state.drill === 'speed') {
-            p.appendChild(el('p', 'cd-blurb', 'Cards flash one at a time. Keep the running count, then enter it at the end.'));
+        if (state.drill === 'speed' || state.drill === 'truecount') {
+            p.appendChild(el('p', 'cd-blurb', state.drill === 'truecount'
+                ? 'Cards flash one at a time — keep the running count. At the end, use the discard tray to gauge decks remaining and give the TRUE count (running ÷ decks).'
+                : 'Cards flash one at a time. Keep the running count, then enter it at the end.'));
 
             var s = settings();
             p.appendChild(buildChoiceRow('Cards', SPEED_SIZES.map(function (n) {
@@ -154,7 +162,7 @@
         var p = panel();
         if (p) p.innerHTML = '';
 
-        if (state.drill === 'speed') {
+        if (state.drill === 'speed' || state.drill === 'truecount') {
             var s = settings();
             state.target = s.speedCountSize || 52;
             var rate = s.speedCountRate || 2;
@@ -208,27 +216,33 @@
     function renderAnswer() {
         stopTimer();
         state.phase = 'answer';
-        if (state.drill === 'speed') clearStage();
+        if (state.drill === 'speed' || state.drill === 'truecount') clearStage();
+        // The true-count answer depends on decks remaining, which flashNext()
+        // never needed to compute (speed only cares about the raw count) —
+        // capture it now, once, right as the flashing stops.
+        if (state.drill === 'truecount') state.actualDecks = BJ.Count.getDecksRemaining(state.shoe);
 
         var p = panel();
         if (!p) return;
         p.innerHTML = '';
 
-        if (state.drill === 'speed') {
-            p.appendChild(el('h3', 'cd-question', 'What is the running count?'));
+        if (state.drill === 'speed' || state.drill === 'truecount') {
+            var isTC = state.drill === 'truecount';
+            p.appendChild(el('h3', 'cd-question', isTC ? 'What is the TRUE count?' : 'What is the running count?'));
+            if (isTC) p.appendChild(el('p', 'cd-hint', 'Check the discard tray for decks remaining, then divide.'));
 
             var wrap = el('div', 'cd-answer-row');
             var input = el('input', 'cd-input');
             input.type = 'number';
             input.id = 'cd-input';
             input.setAttribute('inputmode', 'numeric');
-            input.setAttribute('aria-label', 'Running count');
+            input.setAttribute('aria-label', isTC ? 'True count' : 'Running count');
             wrap.appendChild(input);
 
             var submit = el('button', 'button button--primary', 'Check');
             submit.type = 'button';
-            submit.addEventListener('click', function () { gradeSpeed(input.value); });
-            input.addEventListener('keydown', function (e) { if (e.key === 'Enter') gradeSpeed(input.value); });
+            submit.addEventListener('click', function () { (isTC ? gradeTrueCount : gradeSpeed)(input.value); });
+            input.addEventListener('keydown', function (e) { if (e.key === 'Enter') (isTC ? gradeTrueCount : gradeSpeed)(input.value); });
             wrap.appendChild(submit);
 
             p.appendChild(wrap);
@@ -270,6 +284,24 @@
             (correct ? 'Close enough — ' : 'Off — ') + actual + ' decks remained. You said ' + guess + '.');
     }
 
+    /**
+     * Grades the True Count drill. Reuses the same 'count-true' stats bucket
+     * the in-Play TC quiz writes to — both measure the identical skill
+     * (RC ÷ decks-remaining conversion), so one shared bucket is correct,
+     * not an oversight.
+     */
+    function gradeTrueCount(raw) {
+        var given = Number(String(raw).trim());
+        if (!Number.isFinite(given)) return;
+        var decksRemaining = state.actualDecks;
+        var actualTC = BJ.Count.getTrueCount(state.localCount, decksRemaining);
+        var correct = Math.abs(given - actualTC) <= TC_TOLERANCE;
+        var g = gm(); if (g) g.recordDrillResult('count-true', correct);
+        var rc = state.localCount >= 0 ? ('+' + state.localCount) : String(state.localCount);
+        renderResult(correct,
+            (correct ? 'Close enough — ' : 'Off — ') + 'RC ' + rc + ' ÷ ' + decksRemaining + ' decks ≈ TC ' + actualTC + '. You said ' + given + '.');
+    }
+
     function renderResult(correct, message) {
         state.phase = 'result';
         var p = panel();
@@ -294,8 +326,10 @@
     // public entry / exit
     // ------------------------------------------------------------------
 
+    var DRILL_TITLES = { speed: 'Speed Count', estimation: 'Deck Estimation', truecount: 'True Count' };
+
     var CountDrills = {
-        /** Opens a drill view. `drill` is 'speed' | 'estimation'. */
+        /** Opens a drill view. `drill` is 'speed' | 'estimation' | 'truecount'. */
         open(drill) {
             state.drill = drill;
             var container = byId('count-drill-container');
@@ -306,7 +340,7 @@
             if (container) container.style.display = 'flex';
 
             var title = byId('cd-title');
-            if (title) title.textContent = drill === 'speed' ? 'Speed Count' : 'Deck Estimation';
+            if (title) title.textContent = DRILL_TITLES[drill] || drill;
 
             renderSetup();
         },
@@ -317,7 +351,8 @@
             clearStage();
             var container = byId('count-drill-container');
             if (container) container.style.display = 'none';
-            if (BJ.Hub && typeof BJ.Hub.showHub === 'function') BJ.Hub.showHub('count');
+            // 'count' was folded into 'practice' (Counting section) — see hub.js.
+            if (BJ.Hub && typeof BJ.Hub.showHub === 'function') BJ.Hub.showHub('practice');
         },
 
         _state: state // exposed for verification only

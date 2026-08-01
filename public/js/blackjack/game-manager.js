@@ -376,11 +376,28 @@
          *
          * @returns {boolean} true if a prompt was raised.
          */
+        /**
+         * "Play N hands in Test Out" is the daily challenge's only event
+         * that isn't a graded decision, so it can't ride through
+         * `_recordDecision` like everything else in gamification.js does —
+         * it needs its own call, once per resolved Test-Out round.
+         */
+        _recordHandPlayedIfTestout() {
+            if (this.gameMode !== 'testout' || !BJ.Gamification) return;
+            const completions = BJ.Gamification.recordHandPlayed();
+            if (completions.length) this._emit('onChallengeCompleted', completions[0]);
+        }
+
         _maybePromptCount() {
-            if (this.gameMode !== 'testout') return false;
+            if (!this._isCountCheckEligibleMode()) return false;
             if (this.settings.casualMode) return false;
 
-            const type = this.settings.countPrompt;
+            // True Count checks are reserved for the dedicated True Count
+            // practice — Hard/Soft/Pairs drills only ever quiz the RUNNING
+            // count (see _isCountCheckEligibleMode's header), even if the
+            // player left settings.countPrompt on 'true' from a Play session
+            // (that setting only governs 'testout').
+            const type = this.gameMode === 'testout' ? this.settings.countPrompt : 'running';
             if (type !== 'running' && type !== 'true') return false;
 
             const interval = Math.max(1, this.settings.countPromptInterval || 3);
@@ -418,6 +435,19 @@
 
             this._recordDecision(mode, correct);
 
+            // Re-anchor safeguard: a MISSED running-count check reshuffles
+            // the shoe (Count.runningCount -> 0) right after revealing the
+            // correct answer. The engine's count was never actually wrong —
+            // only the player's mental tally was — but there is no way to
+            // hand them back "the right number to resume from" mid-shoe. A
+            // clean reshuffle gives them a verifiably-zero count to resync
+            // on for the next check, instead of one missed card silently
+            // offsetting every later guess by a fixed, compounding amount.
+            // Scoped to 'running' only — the standalone True Count practice
+            // doesn't go through this method at all (own shoe), and a missed
+            // TRUE count in a Play session is a rounding/estimation slip,
+            // not a lost card, so it doesn't need a hard reset.
+            let reanchored = false;
             if (!correct) {
                 this._logMistake({
                     mode,
@@ -427,16 +457,22 @@
                     playerAction: String(given),
                     optimalPlay: String(pending.expected)
                 });
-                this._emit('onFeedback', 'Count was ' + pending.expected + ', you said ' + given, 3000);
+                if (pending.type === 'running') {
+                    reanchored = true;
+                    this._reshuffle();
+                    this._emit('onFeedback', 'Count was ' + pending.expected + ', you said ' + given + ' — fresh shoe, count reset.', 3200);
+                } else {
+                    this._emit('onFeedback', 'Count was ' + pending.expected + ', you said ' + given, 3000);
+                }
             } else {
                 this._emit('onFeedback', 'Count correct: ' + pending.expected, 1600);
             }
 
             this.state = 'idle';
             this._emit('onStateChange', this.state);
-            this._emit('onCountPromptResolved', { correct, expected: pending.expected, given });
+            this._emit('onCountPromptResolved', { correct, expected: pending.expected, given, reanchored });
 
-            return { correct, expected: pending.expected, given };
+            return { correct, expected: pending.expected, given, reanchored };
         }
 
         /**
@@ -818,6 +854,48 @@
             return this.gameMode === 'testout' && !this.settings.freeplay;
         }
 
+        /**
+         * Should strategy grading for the CURRENT decision consult the
+         * Illustrious-18 deviation table (i.e. use the live running count),
+         * or grade against pure basic strategy (trueCount forced to 0)?
+         *
+         * This is the fix for "no deviations should be expected" leaking
+         * into basic-strategy practice: Hard/Soft/Pairs fabricate real cards
+         * every round, which DO accumulate into the shared Count.runningCount
+         * as they're dealt (by design — see the counting-checks feature
+         * below). Before this gate existed, that ambient count silently fed
+         * into `getOptimalPlay`, so a Hard-totals drill could occasionally
+         * grade a deviation play as "correct" purely because the shoe
+         * happened to be counted hot — even though the player was never told
+         * counting was in play. 'deviations'/'surrender' deliberately test
+         * count-driven index plays and stay count-aware; 'targeted' replays
+         * logged misses verbatim and is left as it already was (unchanged,
+         * out of scope here).
+         */
+        _isCountAwareMode() {
+            return this.gameMode === 'testout' || this.gameMode === 'deviations'
+                || this.gameMode === 'surrender' || this.gameMode === 'targeted';
+        }
+
+        /**
+         * Which modes may raise a periodic running/true-count check. Distinct
+         * from `_isCountAwareMode()` on purpose: a count CHECK tests whether
+         * the player can track the count, independent of whether the mode's
+         * STRATEGY grading incorporates deviations — Hard/Soft/Pairs stay
+         * pure basic strategy (see above) even while their count checks are
+         * turned on.
+         *
+         * Gated to `_playsOutHand()` for the drills: this is the "Count +
+         * Strategy" rung of the skill ladder — playing full hands while
+         * tracking the count — so it only fires in the 'full' drill style,
+         * never mid-flash-card.
+         */
+        _isCountCheckEligibleMode() {
+            if (this.gameMode === 'testout') return true;
+            const isBasicDrill = this.gameMode === 'hard' || this.gameMode === 'soft' || this.gameMode === 'pairs';
+            return isBasicDrill && !!this.settings.drillCountChecks && this._playsOutHand();
+        }
+
         _canSurrender(hand) {
             return Rules.lateSurrender
                 && !!hand && hand.cards.length === 2 && !hand.surrendered && !hand.resolved
@@ -855,7 +933,12 @@
             if (this.state !== 'player-turn') return null;
 
             const dealerUpcard = this.dealerHand.cards[1].value;
-            const trueCount = Count.getTrueCount(Count.runningCount, Count.getDecksRemaining(this.shoe));
+            // Basic-strategy-only modes always grade against trueCount 0 —
+            // see _isCountAwareMode()'s header comment for why this must not
+            // read the live (ambient) count.
+            const trueCount = this._isCountAwareMode()
+                ? Count.getTrueCount(Count.runningCount, Count.getDecksRemaining(this.shoe))
+                : 0;
             const canDouble = hand.cards.length === 2 && this._hasFunds(hand.bet);
             const canSplit = hand.isPair && this.playerHands.length < 4 && this._hasFunds(hand.bet);
             const canSurrender = this._canSurrender(hand);
@@ -880,6 +963,11 @@
             if (!correct) {
                 this._logMistake({ hand, dealerUpcard, trueCount, playerAction: actionCode, optimalPlay, mode: this.gameMode });
                 this._emit('onFeedback', 'Error: Optimal play is ' + (ACTION_LABELS[optimalPlay] || optimalPlay), 2500);
+            } else {
+                // Fast, non-blocking positive reinforcement on a correct play
+                // (render.js flashes a ✓). Fire-and-forget — never gates the
+                // deal loop.
+                this._emit('onCorrectPlay', actionCode);
             }
 
             return { correct, optimalPlay };
@@ -901,6 +989,18 @@
 
             // Raw per-decision point for the accuracy-over-time trend.
             Storage.pushDecision({ t: Date.now(), correct: !!correct, mode });
+
+            // Phase 4c: XP/streak/achievements/daily-challenge all flow from
+            // this ONE choke point — every graded decision in the app
+            // (Play, every strategy drill, every count check, and the
+            // standalone count-drills.js runs via recordDrillResult) funnels
+            // through _recordDecision, so gamification.js only needs this
+            // single hook to see everything.
+            if (BJ.Gamification) {
+                const result = BJ.Gamification.onDecision(mode, correct);
+                if (result.achievements.length) this._emit('onAchievementsUnlocked', result.achievements);
+                if (result.challengeCompletions.length) this._emit('onChallengeCompleted', result.challengeCompletions[0]);
+            }
 
             const modeStats = this.sessionStats.byMode[mode];
             const sessionAccuracy = modeStats.total > 0 ? Math.round((modeStats.correct / modeStats.total) * 100) : null;
@@ -1169,8 +1269,9 @@
             hand.payout = hand.bet * Rules.blackjackPayout;
             hand.resolved = true;
 
-            if (!this.settings.freeplay) {
-                this.bankroll += hand.payout;
+            // Return the escrowed stake plus the 3:2 profit (see _resolveRound).
+            if (this._isMoneyMode()) {
+                this.bankroll += hand.bet + hand.payout;
                 this._persistBankroll();
             }
 
@@ -1185,6 +1286,7 @@
             this.insuranceBet = 0;
             this._emit('onBetChange', 0);
 
+            this._recordHandPlayedIfTestout(); // "Full Table" daily-challenge tracking
             this._maybePromptCount();          // must precede the reshuffle
             if (this.shoe.needsShuffle) this._reshuffle();
         }
@@ -1206,7 +1308,7 @@
             let insurancePayout = 0;
             if (dBlackjack && this.insuranceBet > 0) {
                 insurancePayout = this.insuranceBet * 2; // net profit at 2:1
-                if (!this.settings.freeplay) {
+                if (this._isMoneyMode()) {
                     this.bankroll += this.insuranceBet * 3; // original bet back + 2x profit
                 }
             }
@@ -1231,9 +1333,16 @@
                 }
             });
 
+            // `bankrollDelta` is the NET result (win/loss/push profit) used for
+            // reporting. The bankroll itself must ALSO get the escrowed stakes
+            // back: setBet/double/split removed `hand.bet` from the bankroll up
+            // front, so settlement returns `stake + net` per hand. Returning
+            // only the net (the old bug) made pushes lose the stake, wins
+            // underpay, and losses double-charge into the negative.
             const bankrollDelta = this.playerHands.reduce((sum, h) => sum + h.payout, 0);
-            if (!this.settings.freeplay) {
-                this.bankroll += bankrollDelta;
+            const stakeReturned = this.playerHands.reduce((sum, h) => sum + h.bet, 0);
+            if (this._isMoneyMode()) {
+                this.bankroll += stakeReturned + bankrollDelta;
                 this._persistBankroll();
             }
 
@@ -1248,6 +1357,7 @@
             this.insuranceBet = 0;
             this._emit('onBetChange', 0);
 
+            this._recordHandPlayedIfTestout(); // "Full Table" daily-challenge tracking
             this._maybePromptCount();          // must precede the reshuffle
             if (this.shoe.needsShuffle) this._reshuffle();
         }

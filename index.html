@@ -37,86 +37,114 @@
 
         <main class="hub__body">
 
-            <!-- DRILLS -->
-            <section class="hub-panel active" data-panel="drills">
-                <div class="option-row">
-                    <span class="option-row__label">Drill style</span>
-                    <div class="segmented" id="drill-style-toggle" role="group" aria-label="Drill style">
-                        <button class="seg active" data-style="flash" type="button">Flash</button>
-                        <button class="seg" data-style="full" type="button">Full hands</button>
-                    </div>
-                </div>
-                <div class="tile-grid">
-                    <button id="btn-mode-hard" class="tile tile--hard">
-                        <span class="tile__glyph"><i class="icon solid fa-hashtag"></i></span>
-                        <span class="tile__name">Hard Totals</span>
-                        <span class="tile__sub">Basic strategy</span>
-                    </button>
-                    <button id="btn-mode-soft" class="tile tile--soft">
-                        <span class="tile__glyph"><i class="icon solid fa-feather"></i></span>
-                        <span class="tile__name">Soft Totals</span>
-                        <span class="tile__sub">Ace hands</span>
-                    </button>
-                    <button id="btn-mode-pairs" class="tile tile--pairs">
-                        <span class="tile__glyph"><i class="icon solid fa-clone"></i></span>
-                        <span class="tile__name">Pairs</span>
-                        <span class="tile__sub">Split decisions</span>
-                    </button>
-                    <button id="btn-mode-deviations" class="tile tile--dev">
-                        <span class="tile__glyph"><i class="icon solid fa-code-branch"></i></span>
-                        <span class="tile__name">Deviations</span>
-                        <span class="tile__sub">Illustrious 18</span>
-                    </button>
-                    <button id="btn-mode-surrender" class="tile tile--surr">
-                        <span class="tile__glyph"><i class="icon solid fa-flag"></i></span>
-                        <span class="tile__name">Surrender</span>
-                        <span class="tile__sub">Fab 4 indices</span>
-                    </button>
-                    <button id="btn-mode-targeted" class="tile tile--targeted" type="button">
-                        <span class="tile__glyph"><i class="icon solid fa-crosshairs"></i></span>
-                        <span class="tile__name">Targeted</span>
-                        <span class="tile__sub">Your weak spots</span>
-                    </button>
-                </div>
+            <!-- PATH — the Skill Ladder, the default/hero tab. Rendered by
+                 path-render.js from BJ.Gamification's ladder/challenge data. -->
+            <section class="hub-panel active" data-panel="path">
+                <div id="hub-path-body" class="hub-scroll"></div>
             </section>
 
-            <!-- COUNT -->
-            <section class="hub-panel" data-panel="count">
-                <div class="tile-grid tile-grid--short">
-                    <button id="btn-drill-speed" class="tile tile--speed" type="button">
-                        <span class="tile__glyph"><i class="icon solid fa-bolt"></i></span>
-                        <span class="tile__name">Speed Count</span>
-                        <span class="tile__sub">Count N cards, fast</span>
-                    </button>
-                    <button id="btn-drill-estimation" class="tile tile--estim" type="button">
-                        <span class="tile__glyph"><i class="icon solid fa-ruler-vertical"></i></span>
-                        <span class="tile__name">Deck Estimation</span>
-                        <span class="tile__sub">Read the discard tray</span>
-                    </button>
-                </div>
-
-                <!-- Count Checks is a way of PLAYING, not a separate screen —
-                     so it configures the graded Play session rather than
-                     being a tile that launches something. -->
-                <div class="config-card">
-                    <h4 class="config-card__title"><i class="icon solid fa-stopwatch"></i> Count Checks during Play</h4>
-                    <p class="config-card__note">Get quizzed mid-session. <strong>True</strong> also hides the TC readout, so you must estimate the decks yourself.</p>
+            <!-- PRACTICE — merges the old Drills + Count tabs into one
+                 sectioned, scrollable list ("Strategy Drills" then
+                 "Counting"). Every tile below keeps its original #btn-* id,
+                 so ui-bindings.js's bindings (built once at load time) still
+                 find them regardless of which panel they now live in. -->
+            <section class="hub-panel" data-panel="practice">
+                <div class="hub-scroll practice-panel">
                     <div class="option-row">
-                        <span class="option-row__label">Ask for</span>
-                        <div class="segmented" id="count-prompt-toggle" role="group" aria-label="Count check type">
-                            <button class="seg active" data-prompt="off" type="button">Off</button>
-                            <button class="seg" data-prompt="running" type="button">Running</button>
-                            <button class="seg" data-prompt="true" type="button">True</button>
+                        <span class="option-row__label">Drill style</span>
+                        <div class="segmented" id="drill-style-toggle" role="group" aria-label="Drill style">
+                            <button class="seg active" data-style="flash" type="button">Flash</button>
+                            <button class="seg" data-style="full" type="button">Full hands</button>
                         </div>
                     </div>
-                    <div class="option-row">
-                        <span class="option-row__label">Every</span>
-                        <select id="count-interval" aria-label="Hands between count checks">
-                            <option value="2">2 hands</option>
-                            <option value="3" selected>3 hands</option>
-                            <option value="5">5 hands</option>
-                            <option value="8">8 hands</option>
-                        </select>
+
+                    <h3 class="practice-section-title">Strategy Drills</h3>
+                    <div class="tile-grid tile-grid--practice">
+                        <button id="btn-mode-hard" class="tile tile--hard">
+                            <span class="tile__glyph"><i class="icon solid fa-hashtag"></i></span>
+                            <span class="tile__name">Hard Totals</span>
+                            <span class="tile__sub">Basic strategy</span>
+                        </button>
+                        <button id="btn-mode-soft" class="tile tile--soft">
+                            <span class="tile__glyph"><i class="icon solid fa-feather"></i></span>
+                            <span class="tile__name">Soft Totals</span>
+                            <span class="tile__sub">Ace hands</span>
+                        </button>
+                        <button id="btn-mode-pairs" class="tile tile--pairs">
+                            <span class="tile__glyph"><i class="icon solid fa-clone"></i></span>
+                            <span class="tile__name">Pairs</span>
+                            <span class="tile__sub">Split decisions</span>
+                        </button>
+                        <button id="btn-mode-deviations" class="tile tile--dev">
+                            <span class="tile__glyph"><i class="icon solid fa-code-branch"></i></span>
+                            <span class="tile__name">Deviations</span>
+                            <span class="tile__sub">Illustrious 18</span>
+                        </button>
+                        <button id="btn-mode-surrender" class="tile tile--surr">
+                            <span class="tile__glyph"><i class="icon solid fa-flag"></i></span>
+                            <span class="tile__name">Surrender</span>
+                            <span class="tile__sub">Fab 4 indices</span>
+                        </button>
+                        <button id="btn-mode-targeted" class="tile tile--targeted" type="button">
+                            <span class="tile__glyph"><i class="icon solid fa-crosshairs"></i></span>
+                            <span class="tile__name">Targeted</span>
+                            <span class="tile__sub">Your weak spots</span>
+                        </button>
+                    </div>
+
+                    <h3 class="practice-section-title">Counting</h3>
+                    <div class="tile-grid tile-grid--short">
+                        <button id="btn-drill-speed" class="tile tile--speed" type="button">
+                            <span class="tile__glyph"><i class="icon solid fa-bolt"></i></span>
+                            <span class="tile__name">Speed Count</span>
+                            <span class="tile__sub">Count N cards, fast</span>
+                        </button>
+                        <button id="btn-drill-estimation" class="tile tile--estim" type="button">
+                            <span class="tile__glyph"><i class="icon solid fa-ruler-vertical"></i></span>
+                            <span class="tile__name">Deck Estimation</span>
+                            <span class="tile__sub">Read the discard tray</span>
+                        </button>
+                        <button id="btn-drill-truecount" class="tile tile--truecount" type="button">
+                            <span class="tile__glyph"><i class="icon solid fa-divide"></i></span>
+                            <span class="tile__name">True Count</span>
+                            <span class="tile__sub">RC ÷ decks conversion</span>
+                        </button>
+                    </div>
+
+                    <!-- Count Checks are a way of PLAYING, not a separate screen —
+                         these configure other sessions (Play, and Hard/Soft/Pairs
+                         drills) rather than launching anything themselves. -->
+                    <div class="config-card">
+                        <h4 class="config-card__title"><i class="icon solid fa-stopwatch"></i> Count Checks</h4>
+
+                        <div class="option-row">
+                            <span class="option-row__label">During Play</span>
+                            <div class="segmented" id="count-prompt-toggle" role="group" aria-label="Count check type during Play">
+                                <button class="seg active" data-prompt="off" type="button">Off</button>
+                                <button class="seg" data-prompt="running" type="button">Running</button>
+                                <button class="seg" data-prompt="true" type="button">True</button>
+                            </div>
+                        </div>
+                        <p class="config-card__note"><strong>True</strong> also hides the TC readout, so you must estimate the decks yourself.</p>
+
+                        <div class="option-row">
+                            <span class="option-row__label">In Hard/Soft/Pairs</span>
+                            <div class="segmented" id="drill-count-toggle" role="group" aria-label="Running count checks in basic strategy drills">
+                                <button class="seg active" data-drillcount="false" type="button">Off</button>
+                                <button class="seg" data-drillcount="true" type="button">On</button>
+                            </div>
+                        </div>
+                        <p class="config-card__note">Running count only — strategy grading there always stays pure basic strategy, never deviations. Needs "Full hands" drill style (above) to fire.</p>
+
+                        <div class="option-row">
+                            <span class="option-row__label">Every</span>
+                            <select id="count-interval" aria-label="Hands between count checks">
+                                <option value="2">2 hands</option>
+                                <option value="3" selected>3 hands</option>
+                                <option value="5">5 hands</option>
+                                <option value="8">8 hands</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -131,28 +159,39 @@
                 <div id="hub-stats-body" class="hub-scroll"></div>
             </section>
 
-            <!-- SETTINGS (same ids ui-bindings.js already wires) -->
-            <section class="hub-panel" data-panel="settings">
-                <div class="hub-scroll settings-panel">
-                    <div class="settings-heading">Display &amp; Pace</div>
-                    <label class="settings-row"><input type="checkbox" id="toggle-bankroll"> Freeplay (Infinite Bankroll)</label>
-                    <label class="settings-row"><input type="checkbox" id="toggle-totals"> Hide Hand Totals</label>
-                    <label class="settings-row"><input type="checkbox" id="toggle-banner"> Disable Victory Banner</label>
-                    <label class="settings-row"><input type="checkbox" id="toggle-sound"> Enable Audio</label>
+            <!-- PROFILE — rank/XP/achievements/challenge (dynamic, rendered
+                 by profile-render.js into #hub-profile-body) plus the
+                 Settings controls as a static subsection below. Settings
+                 controls use [data-setting] (NOT ids) so the exact same
+                 markup can ALSO appear in the in-game #settings-menu overlay
+                 without duplicate ids; ui-bindings.js's binder wires + keeps
+                 every instance in sync. -->
+            <section class="hub-panel" data-panel="profile">
+                <div class="hub-scroll profile-panel">
+                    <div id="hub-profile-body"></div>
 
-                    <label class="settings-row settings-select-row">
-                        Game Speed
-                        <select id="config-speed">
-                            <option value="1200">Slow</option>
-                            <option value="800" selected>Normal</option>
-                            <option value="300">Fast</option>
-                            <option value="0">Instant</option>
-                        </select>
-                    </label>
+                    <h3 class="practice-section-title">Settings</h3>
+                    <div class="settings-panel">
+                        <div class="settings-heading">Display &amp; Pace</div>
+                        <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="freeplay"> Freeplay (Infinite Bankroll)</label>
+                        <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="hideTotals"> Hide Hand Totals</label>
+                        <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="disableBanner"> Disable Victory Banner</label>
+                        <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="soundEnabled"> Enable Audio</label>
 
-                    <div class="settings-divider">
-                        <div class="settings-heading">Table Rules</div>
-                        <p class="settings-rules-note">6 Decks &middot; S17 &middot; DAS &middot; Late Surrender &middot; 75% Penetration (fixed)</p>
+                        <label class="settings-row settings-select-row">
+                            Game Speed
+                            <select class="setting-control" data-setting="gameSpeed">
+                                <option value="1200">Slow</option>
+                                <option value="800">Normal</option>
+                                <option value="300">Fast</option>
+                                <option value="0">Instant</option>
+                            </select>
+                        </label>
+
+                        <div class="settings-divider">
+                            <div class="settings-heading">Table Rules</div>
+                            <p class="settings-rules-note">6 Decks &middot; S17 &middot; DAS &middot; Late Surrender &middot; 75% Penetration (fixed)</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -170,11 +209,11 @@
         </div>
 
         <nav class="hub__nav" aria-label="Sections">
-            <button class="hub-tab active" data-tab="drills" type="button"><i class="icon solid fa-graduation-cap"></i><span>Drills</span></button>
-            <button class="hub-tab" data-tab="count" type="button"><i class="icon solid fa-calculator"></i><span>Count</span></button>
+            <button class="hub-tab active" data-tab="path" type="button"><i class="icon solid fa-route"></i><span>Path</span></button>
+            <button class="hub-tab" data-tab="practice" type="button"><i class="icon solid fa-dumbbell"></i><span>Practice</span></button>
             <button class="hub-tab" data-tab="charts" type="button"><i class="icon solid fa-th"></i><span>Charts</span></button>
             <button class="hub-tab" data-tab="stats" type="button"><i class="icon solid fa-chart-line"></i><span>Stats</span></button>
-            <button class="hub-tab" data-tab="settings" type="button"><i class="icon solid fa-sliders-h"></i><span>Settings</span></button>
+            <button class="hub-tab" data-tab="profile" type="button"><i class="icon solid fa-user-circle"></i><span>Profile</span></button>
         </nav>
     </div>
 
@@ -201,8 +240,33 @@
             </div>
         </div>
 
+        <!-- In-game settings overlay: opened by the gear WITHOUT leaving the
+             table. Same [data-setting] controls as the hub Settings tab; the
+             ui-bindings binder keeps both instances in sync. -->
+        <div id="settings-menu" class="settings-overlay">
+            <div class="settings-overlay__head">
+                <span class="settings-heading">Settings</span>
+                <button id="btn-close-settings" class="close-modal" aria-label="Close settings">&times;</button>
+            </div>
+            <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="freeplay"> Freeplay (Infinite Bankroll)</label>
+            <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="hideTotals"> Hide Hand Totals</label>
+            <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="disableBanner"> Disable Victory Banner</label>
+            <label class="settings-row"><input type="checkbox" class="setting-control" data-setting="soundEnabled"> Enable Audio</label>
+            <label class="settings-row settings-select-row">
+                Game Speed
+                <select class="setting-control" data-setting="gameSpeed">
+                    <option value="1200">Slow</option>
+                    <option value="800">Normal</option>
+                    <option value="300">Fast</option>
+                    <option value="0">Instant</option>
+                </select>
+            </label>
+        </div>
+
         <div id="game-message" class="hidden" role="status" aria-live="polite">Message</div>
         <div id="ap-feedback" role="status" aria-live="polite">Basic Strategy Error</div>
+        <!-- Fast positive cue on a correct decision (render.js onCorrectPlay) -->
+        <div id="correct-cue" class="correct-cue" aria-hidden="true"><i class="icon solid fa-check"></i></div>
 
         <!-- Periodic count quiz (state 'count-check') -->
         <div id="count-prompt" class="count-prompt">
@@ -242,7 +306,6 @@
                 <div id="table-bet-bubble" class="table-bet-bubble">$0</div>
             </div>
 
-            <div id="player-score" class="score-badge">0</div>
             <div id="player-cards" class="hand-cards"></div>
         </div>
 
@@ -331,6 +394,7 @@
     <script defer src="/js/blackjack/count.js"></script>
     <script defer src="/js/blackjack/strategy-engine.js"></script>
     <script defer src="/js/blackjack/persistence.js"></script>
+    <script defer src="/js/blackjack/gamification.js"></script>
     <script defer src="/js/blackjack/game-manager.js"></script>
     <script defer src="/js/blackjack/audio.js"></script>
     <script defer src="/js/blackjack/render.js"></script>
@@ -341,6 +405,8 @@
     <!-- These load AFTER boot.js on purpose: they init on window 'load', and
          their handlers must run second so BJ.instance already exists. -->
     <script defer src="/js/blackjack/count-drills.js"></script>
+    <script defer src="/js/blackjack/path-render.js"></script>
+    <script defer src="/js/blackjack/profile-render.js"></script>
     <script defer src="/js/blackjack/hub.js"></script>
 </body>
 </html>

@@ -8,16 +8,28 @@
 // would have silently broken every drill. The Play CTA is likewise just
 // #btn-mode-testout wearing a different hat.
 //
-// LOAD ORDER: this file must come AFTER boot.js. Both init on window
-// 'load' and listeners fire in registration order, so loading last is what
-// guarantees BJ.instance already exists when init() reads settings.
+// LOAD ORDER: this file must come AFTER boot.js AND after every render
+// module it calls into (path-render/profile-render/reference-render/
+// stats-render). Both init on window 'load' and listeners fire in
+// registration order, so loading last is what guarantees BJ.instance
+// already exists when init() reads settings.
+//
+// Tabs: Path / Practice / Charts / Stats / Profile.
+//   - Path    -> BJ.PathRender    (the skill ladder + today's challenge)
+//   - Practice -> merges the old Drills + Count tabs into one sectioned,
+//     scrollable panel ("Strategy Drills" then "Counting"); no renderer,
+//     it's static tile markup, same #btn-mode-*/#btn-drill-* ids as before.
+//   - Stats   -> BJ.StatsRender
+//   - Profile -> BJ.ProfileRender (rank/XP/achievements/challenge) plus a
+//     static Settings subsection reusing the same [data-setting] controls
+//     as the in-game overlay.
+// Path/Stats/Profile re-render every time they're activated (their data
+// changes every hand); Charts is static content, rendered once and kept.
 //
 // What this file does own:
 //   - which hub tab is active (.hub-tab / .hub-panel)
-//   - lazily rendering the Charts + Stats panels via the existing
-//     BJ.ReferenceRender / BJ.StatsRender renderers
 //   - the Graded|Casual segmented control (writes settings.casualMode)
-//   - the table screen's gear -> back to the hub's Settings tab
+//   - drill-style / count-check toggles (writes to gm settings)
 // ==========================================
 
 (function (root) {
@@ -30,7 +42,7 @@
     function byId(id) { return document.getElementById(id); }
     function all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
 
-    var state = { tab: 'drills', chartsRendered: false };
+    var state = { tab: 'path', chartsRendered: false };
 
     function gm() { return BJ.instance && BJ.instance.gameManager; }
 
@@ -38,6 +50,11 @@
 
     function selectTab(name) {
         state.tab = name;
+
+        // Reflect the active tab on the hub root so CSS can hide the Play CTA
+        // on reference/data tabs (where it otherwise covers the chart legend).
+        var hubRoot = byId('main-menu');
+        if (hubRoot) hubRoot.dataset.activeTab = name;
 
         all('.hub-tab').forEach(function (t) {
             var on = t.dataset.tab === name;
@@ -49,7 +66,7 @@
         });
 
         // Reflects the live mistake log, which any drill/session can grow.
-        if (name === 'drills') syncTargetedTile();
+        if (name === 'practice') syncTargetedTile();
 
         // Charts are static once built — render once and keep.
         if (name === 'charts' && !state.chartsRendered) {
@@ -57,10 +74,21 @@
                 state.chartsRendered = !!BJ.ReferenceRender.render(byId('hub-charts-body'));
             }
         }
-        // Stats reflect live persisted state — always re-render on open.
+        // Stats/Path/Profile all reflect live persisted state that changes
+        // every hand — always re-render on open, never cached like Charts.
         if (name === 'stats') {
             if (BJ.StatsRender && typeof BJ.StatsRender.render === 'function') {
                 BJ.StatsRender.render(byId('hub-stats-body'));
+            }
+        }
+        if (name === 'path') {
+            if (BJ.PathRender && typeof BJ.PathRender.render === 'function') {
+                BJ.PathRender.render(byId('hub-path-body'));
+            }
+        }
+        if (name === 'profile') {
+            if (BJ.ProfileRender && typeof BJ.ProfileRender.render === 'function') {
+                BJ.ProfileRender.render(byId('hub-profile-body'));
             }
         }
     }
@@ -103,6 +131,7 @@
         var s = g ? g.getSettings() : {};
         syncSegmented('#drill-style-toggle', 'style', s.drillStyle || 'flash');
         syncSegmented('#count-prompt-toggle', 'prompt', s.countPrompt || 'off');
+        syncSegmented('#drill-count-toggle', 'drillcount', !!s.drillCountChecks);
         var interval = byId('count-interval');
         if (interval && s.countPromptInterval) interval.value = String(s.countPromptInterval);
     }
@@ -157,6 +186,16 @@
                 syncTrainingOptions();
             });
         });
+
+        // Running-count checks folded into Hard/Soft/Pairs practice.
+        all('#drill-count-toggle .seg').forEach(function (s) {
+            s.addEventListener('click', function () {
+                var g = gm();
+                if (g) g.updateSettings({ drillCountChecks: s.dataset.drillcount === 'true' });
+                syncTrainingOptions();
+            });
+        });
+
         var interval = byId('count-interval');
         if (interval) {
             interval.addEventListener('change', function () {
@@ -170,20 +209,20 @@
         if (speed) speed.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('speed'); });
         var estim = byId('btn-drill-estimation');
         if (estim) estim.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('estimation'); });
+        var trueCount = byId('btn-drill-truecount');
+        if (trueCount) trueCount.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('truecount'); });
 
-        // The settings dropdown that used to live on the table screen is now
-        // the hub's Settings tab (one set of control ids, no duplicates), so
-        // the gear routes there instead. ui-bindings.js's own gear handler is
-        // guarded on #settings-menu existing, which it no longer does — so
-        // this is the only listener on it.
-        var gear = byId('btn-settings');
-        if (gear) gear.addEventListener('click', function () { showHub('settings'); });
+        // NOTE: the table gear (#btn-settings) is intentionally NOT wired here
+        // anymore. It opens an in-game settings overlay (ui-bindings.js) so the
+        // player can tweak settings without being ejected back to the hub. The
+        // hub still has its own Settings tab; both share state via the
+        // [data-setting] binder.
 
         var g = gm();
         syncPlayMode(g ? !!g.getSettings().casualMode : false);
         syncTrainingOptions();
 
-        selectTab('drills');
+        selectTab('path');
     }
 
     if (typeof window !== 'undefined') window.addEventListener('load', init);

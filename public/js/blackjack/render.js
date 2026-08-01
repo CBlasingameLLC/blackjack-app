@@ -135,7 +135,8 @@
             var names = [
                 'onStateChange', 'onGameModeChange', 'onCardDealt', 'onDealerCardDealt',
                 'onHoleCardRevealed', 'onHandsUpdate', 'onRoundResolved', 'onFeedback',
-                'onInsuranceResolved', 'onSettingsChange', 'onShuffle', 'onCountChange'
+                'onInsuranceResolved', 'onSettingsChange', 'onShuffle', 'onCountChange',
+                'onCorrectPlay'
             ];
             names.forEach(function (name) {
                 if (typeof self[name] === 'function') {
@@ -375,14 +376,10 @@
             } else {
                 rec.scoreEl.textContent = score.isSoft ? ('Soft ' + score.total) : String(score.total);
             }
-            // Mirror onto the legacy single top-level `#player-score` node
-            // too, for CSS/markup that still targets it directly, but only
-            // when there's exactly one hand (a split has no single "the"
-            // player score).
-            if (this.ui.playerScore && this.handColumns.size === 1) {
-                this.ui.playerScore.textContent = rec.scoreEl.textContent;
-                this.ui.playerScore.style.opacity = rec.scoreEl.style.opacity;
-            }
+            // The per-hand `.hand-score-badge` (rec.scoreEl) is now the ONLY
+            // player total shown — the standalone #player-score badge was
+            // removed (it double-rendered on top of this one for single
+            // hands). This badge already handles splits correctly.
         }
 
         _refreshDealerBadge(dealerHand) {
@@ -603,6 +600,26 @@
 
         onShuffle() {
             this.onFeedback('Shuffling Shoe...', 1500);
+        }
+
+        /**
+         * `onCorrectPlay()` — a fast, non-blocking positive cue (green ✓ pop)
+         * on a correct graded decision. Reuses a single #correct-cue element,
+         * re-triggering the CSS animation by toggling the class across a
+         * reflow; a timeout backstop removes it even if the animation never
+         * fires (throttled compositor), so it can never get stuck on screen.
+         */
+        onCorrectPlay() {
+            var el = this.ui.correctCue;
+            if (!el) return;
+            el.classList.remove('show');
+            void el.offsetWidth; // force reflow so re-adding restarts the pop
+            el.classList.add('show');
+            if (this._correctTimer) clearTimeout(this._correctTimer);
+            var self = this;
+            this._correctTimer = setTimeout(function () {
+                if (self.ui.correctCue) self.ui.correctCue.classList.remove('show');
+            }, 700);
         }
 
         /**

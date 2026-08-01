@@ -53,18 +53,13 @@
         blackjackContainer: byId('blackjack-container'),
         btnReturnMenu: byId('btn-return-menu'),
 
-        // settings
+        // settings — individual toggles are no longer looked up by id; every
+        // settings control now carries [data-setting] and is wired by the
+        // generic binder below (so the in-game overlay and the hub Settings
+        // tab share state without duplicate ids).
         btnSettings: byId('btn-settings'),
         settingsMenu: byId('settings-menu'),
-        toggleSound: byId('toggle-sound'),
-        toggleCasual: byId('toggle-casual'),
-        toggleBankroll: byId('toggle-bankroll'),   // freeplay
-        toggleTotals: byId('toggle-totals'),        // hideTotals
-        toggleBanner: byId('toggle-banner'),        // disableBanner
-        configSpeed: byId('config-speed'),          // gameSpeed
-        // NOTE: config-decks / config-penetration / pen-value intentionally
-        // NOT looked up (bug #5 — ruleset is frozen, those controls and
-        // their listeners are removed in the HTML phase).
+        btnCloseSettings: byId('btn-close-settings'),
 
         // fullscreen
         btnFullscreen: byId('btn-fullscreen'),
@@ -129,6 +124,7 @@
         // feedback / status
         gameMessage: byId('game-message'),
         apFeedback: byId('ap-feedback'),
+        correctCue: byId('correct-cue'),            // NEW — right-answer pop
         sessionStats: byId('session-stats'),
 
         // top bar readouts
@@ -253,6 +249,56 @@
         setDisabled(UI.btnSurrender, !canSurrender);
     }
 
+    /**
+     * Wires every [data-setting] control (in the in-game overlay AND the hub
+     * Settings tab) to gm settings. Checkboxes map to booleans, selects to
+     * their value (numeric-coerced when the value is all digits). soundEnabled
+     * additionally drives the Web Audio engine. onSettingsChange re-syncs all
+     * instances so they never disagree.
+     */
+    function bindSettingControls(gm, Audio) {
+        if (typeof document === 'undefined') return;
+        var controls = Array.prototype.slice.call(document.querySelectorAll('[data-setting]'));
+        if (!controls.length) return;
+
+        function readControl(el) {
+            if (el.type === 'checkbox') return el.checked;
+            var v = el.value;
+            return /^-?\d+$/.test(v) ? parseInt(v, 10) : v;
+        }
+        function writeControl(el, settings) {
+            var val = settings[el.dataset.setting];
+            if (el.type === 'checkbox') el.checked = !!val;
+            else if (val !== undefined && val !== null) el.value = String(val);
+        }
+
+        function applyAudio(enabled) {
+            if (!Audio) return;
+            Audio.enabled = !!enabled;
+            if (enabled && typeof Audio.init === 'function') Audio.init();
+        }
+
+        controls.forEach(function (el) {
+            writeControl(el, gm.getSettings());
+            el.addEventListener('change', function () {
+                var name = el.dataset.setting;
+                var value = readControl(el);
+                var patch = {}; patch[name] = value;
+                gm.updateSettings(patch);
+                if (name === 'soundEnabled') applyAudio(value);
+                if (name === 'freeplay') renderFinance(gm);
+            });
+        });
+
+        // Keep every instance in lockstep whenever settings change anywhere.
+        gm.setCallback('onSettingsChange', function (settings) {
+            controls.forEach(function (el) { writeControl(el, settings); });
+        });
+
+        // Apply persisted sound preference to the engine at boot.
+        applyAudio(gm.getSettings().soundEnabled);
+    }
+
     function applyStatePanels(state) {
         // 'count-check' parks the game between hands to ask for the count —
         // no betting or actions until it's answered.
@@ -288,6 +334,10 @@
             if (UI.blackjackContainer) UI.blackjackContainer.style.display = 'flex';
             if (UI.chipContainer) UI.chipContainer.style.display = (mode === 'testout') ? 'flex' : 'none';
             if (UI.sessionStats) UI.sessionStats.style.display = (mode === 'testout') ? 'none' : 'block';
+            // Only the real-money game shows the bankroll/bet/TC readouts and
+            // the discard tray. Trainer modes hide them (CSS keys off this
+            // class) so the screen stays focused on the decision, not chrome.
+            if (UI.blackjackContainer) UI.blackjackContainer.classList.toggle('is-testout', mode === 'testout');
             renderSessionStats({ sessionAccuracy: null });
             renderFinance(gm);
         });
@@ -302,15 +352,6 @@
                 var anyLoss = (hands || []).some(function (h) { return h.outcome === 'loss'; });
                 if (anyWin) Audio.play('win');
                 else if (anyLoss) Audio.play('loss');
-            });
-        }
-
-        // ---------------- audio enable toggle ----------------
-        if (UI.toggleSound) {
-            UI.toggleSound.addEventListener('change', function (e) {
-                if (!Audio) return;
-                Audio.enabled = e.target.checked;
-                if (e.target.checked) Audio.init();
             });
         }
 
@@ -353,40 +394,33 @@
             UI.btnFullscreen.setAttribute('aria-label', 'Toggle fullscreen');
         }
 
-        // ---------------- settings menu open/close ----------------
+        // ---------------- in-game settings overlay open/close ----------------
+        // The gear opens an overlay ON the table — it does NOT route back to
+        // the hub's Settings tab (that forced-redirect was removed in hub.js).
+        function closeSettings() { if (UI.settingsMenu) UI.settingsMenu.style.display = 'none'; }
         if (UI.btnSettings && UI.settingsMenu) {
             UI.btnSettings.setAttribute('aria-label', 'Settings');
             UI.btnSettings.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var isHidden = window.getComputedStyle(UI.settingsMenu).display === 'none';
-                UI.settingsMenu.style.display = isHidden ? 'block' : 'none';
+                UI.settingsMenu.style.display = isHidden ? 'flex' : 'none';
             });
             document.addEventListener('click', function (e) {
-                if (!UI.settingsMenu.contains(e.target) && e.target !== UI.btnSettings) {
-                    UI.settingsMenu.style.display = 'none';
+                if (UI.settingsMenu.style.display !== 'none'
+                    && !UI.settingsMenu.contains(e.target) && e.target !== UI.btnSettings) {
+                    closeSettings();
                 }
             });
         }
+        if (UI.btnCloseSettings) UI.btnCloseSettings.addEventListener('click', closeSettings);
 
-        // ---------------- settings checkboxes -> GameManager.updateSettings ----------------
-        if (UI.toggleCasual) {
-            UI.toggleCasual.addEventListener('change', function (e) { gm.updateSettings({ casualMode: e.target.checked }); });
-        }
-        if (UI.toggleBankroll) {
-            UI.toggleBankroll.addEventListener('change', function (e) {
-                gm.updateSettings({ freeplay: e.target.checked });
-                renderFinance(gm);
-            });
-        }
-        if (UI.toggleTotals) {
-            UI.toggleTotals.addEventListener('change', function (e) { gm.updateSettings({ hideTotals: e.target.checked }); });
-        }
-        if (UI.toggleBanner) {
-            UI.toggleBanner.addEventListener('change', function (e) { gm.updateSettings({ disableBanner: e.target.checked }); });
-        }
-        if (UI.configSpeed) {
-            UI.configSpeed.addEventListener('change', function (e) { gm.updateSettings({ gameSpeed: parseInt(e.target.value, 10) || 0 }); });
-        }
+        // ---------------- [data-setting] binder ----------------
+        // Every settings control (checkbox/select) carries data-setting=<key>.
+        // One binder wires them all, coerces values, writes gm.updateSettings,
+        // drives the Audio engine for soundEnabled, and — via onSettingsChange
+        // (a multi-subscriber event) — keeps EVERY instance (in-game overlay +
+        // hub Settings tab) visually in sync no matter which one was changed.
+        bindSettingControls(gm, Audio);
 
         // ---------------- reference modal ----------------
         // 'flex' (not 'block'): the strategy charts size themselves to FILL
@@ -473,10 +507,15 @@
             });
         }
 
-        // secret "clear bet" tap targets (stack + bet readout)
+        // secret "clear bet" tap targets (stack + bet readout). Only wipe the
+        // chip visual if the bet was ACTUALLY refunded — a mid-round tap must
+        // not blank the stack while the wager still stands (clearBet no-ops
+        // once cards are out), which used to desync visuals from the money.
         function clearBetAndChips() {
+            var before = gm.getSnapshot().currentBet;
             gm.clearBet();
-            if (R && UI.chipStack) R.clearChips(UI.chipStack);
+            var after = gm.getSnapshot().currentBet;
+            if (before > 0 && after === 0 && R && UI.chipStack) R.clearChips(UI.chipStack);
         }
         if (UI.tableBetArea) UI.tableBetArea.addEventListener('click', clearBetAndChips);
         if (UI.uiBet && UI.uiBet.parentElement) {

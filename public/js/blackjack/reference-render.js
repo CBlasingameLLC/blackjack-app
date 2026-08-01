@@ -100,7 +100,12 @@
     }
 
     function buildHardTable() {
-        var rows = sortedNumericKeys(StrategyData.hard).map(function (t) { return { key: t, label: String(t) }; });
+        // Trim the trivial rows: hard totals below 8 are always Hit and above
+        // 17 are always Stand, so they carry no decision and just make the
+        // chart bigger. Show 8–17 (the rows where the dealer upcard matters).
+        var rows = sortedNumericKeys(StrategyData.hard)
+            .filter(function (t) { return t >= 8 && t <= 17; })
+            .map(function (t) { return { key: t, label: String(t) }; });
         return buildGridTable(StrategyData.hard, rows);
     }
 
@@ -116,27 +121,25 @@
         return buildGridTable(StrategyData.pair, rows);
     }
 
-    /** Surrender is a sparse { total: { dealerValue: true } } shape. */
-    function buildSurrenderTable() {
-        var table = el('table', 'reference-table reference-table-surrender');
-        var thead = el('thead');
-        var headRow = el('tr');
-        headRow.appendChild(el('th', null, 'Hand'));
-        headRow.appendChild(el('th', null, 'Surrender vs.'));
-        thead.appendChild(headRow);
-        table.appendChild(thead);
-
-        var tbody = el('tbody');
+    /**
+     * Surrender is a tiny sparse map ({ total: { dealerValue: true } }) — far
+     * too small to justify its own full-height chart tab. Rendered as a
+     * compact one-line-per-hand block folded into the Rules panel instead.
+     */
+    function buildSurrenderBlock() {
+        var block = el('div', 'chart-rules__block');
+        block.appendChild(el('h4', null, 'Late Surrender (hard totals)'));
+        var list = el('div', 'surrender-lines');
         sortedNumericKeys(StrategyData.surrender).forEach(function (total) {
             var dealerVals = sortedNumericKeys(StrategyData.surrender[total])
                 .map(function (v) { return v === 11 ? 'A' : String(v); });
-            var tr = el('tr');
-            tr.appendChild(el('th', 'reference-row-label', 'Hard ' + total));
-            tr.appendChild(el('td', actionClass('R'), dealerVals.join(', ')));
-            tbody.appendChild(tr);
+            var line = el('div', 'surrender-line');
+            line.appendChild(el('span', 'surrender-line__hand', 'Hard ' + total));
+            line.appendChild(el('span', 'surrender-line__vs', 'surrender vs ' + dealerVals.join(', ')));
+            list.appendChild(line);
         });
-        table.appendChild(tbody);
-        return table;
+        block.appendChild(list);
+        return block;
     }
 
     /**
@@ -223,6 +226,9 @@
         hilo.appendChild(el('p', 'chart-rules__note', 'True Count = Running Count ÷ Decks Remaining'));
         wrap.appendChild(hilo);
 
+        // Surrender folded in here (was its own oversized tab).
+        wrap.appendChild(buildSurrenderBlock());
+
         return wrap;
     }
 
@@ -241,8 +247,8 @@
         { id: 'hard', label: 'Hard', build: buildHardTable, legend: true },
         { id: 'soft', label: 'Soft', build: buildSoftTable, legend: true },
         { id: 'pairs', label: 'Pairs', build: buildPairTable, legend: true },
-        { id: 'surrender', label: 'Surr', build: buildSurrenderTable, legend: false },
         { id: 'deviations', label: 'Dev', build: buildDeviationsTable, legend: false },
+        // Surrender lives inside the Rules panel now (buildSurrenderBlock).
         { id: 'rules', label: 'Rules', build: buildRulesPanel, legend: false }
     ];
 

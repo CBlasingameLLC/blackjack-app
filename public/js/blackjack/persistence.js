@@ -49,11 +49,26 @@
             // TC readout and asks for the true count, so decks must be
             // estimated).
             countPrompt: 'off',
-            countPromptInterval: 3,   // hands between prompts
-            // Speed Count drill config.
+            countPromptInterval: 3,   // hands shared between Play AND drill count checks
+            // Phase 4b: opt-in running-count checks inside Hard/Soft/Pairs
+            // practice (only fires under drillStyle:'full' — see
+            // GameManager._isCountCheckEligibleMode). Always RUNNING count
+            // only; True Count has its own dedicated practice instead.
+            drillCountChecks: false,
+            // Speed Count / True Count drill config (shared: both flash
+            // cards at this size/rate).
             speedCountSize: 52,       // cards per run
             speedCountRate: 2         // cards per second
         };
+    }
+
+    // Phase 4c: local gamification. XP/streak state — `currentStreak` is the
+    // player's live run of consecutive correct graded decisions (ANY mode);
+    // `bestStreak` is the all-time high, used by the "Hot Streak"/"Iron
+    // Focus" achievements. Both live from `_recordDecision`, the same choke
+    // point every other stat already flows through.
+    function defaultProgression() {
+        return { xp: 0, currentStreak: 0, bestStreak: 0 };
     }
 
     // Every mode that can record graded decisions. `_recordDecision` also
@@ -95,6 +110,7 @@
          */
         defaultStatsBucket,
         defaultSettings,
+        defaultProgression,
 
         /**
          * Reads `KEY_PREFIX + key` from localStorage, JSON-parsed. Returns
@@ -189,6 +205,46 @@
             while (log.length > ACCURACY_HISTORY_CAP) log.shift();
             this.set('accuracy_history', log);
             return log;
+        },
+
+        // --- Phase 4c: gamification (progression / achievements / challenge) ---
+
+        getProgression() {
+            return Object.assign(defaultProgression(), this.get('progression', {}));
+        },
+        setProgression(progression) {
+            return this.set('progression', progression);
+        },
+
+        getAchievements() {
+            return this.get('achievements', []); // [{ id, unlockedAt }]
+        },
+        /**
+         * Unlocks `id` if not already unlocked (idempotent — safe to call on
+         * every check, not just the first time a threshold is crossed).
+         * Returns the NEW entry if this call actually unlocked it, else null
+         * — callers use that to know whether to show a toast.
+         */
+        unlockAchievement(id) {
+            const list = this.getAchievements();
+            if (list.some((a) => a.id === id)) return null;
+            const entry = { id, unlockedAt: Date.now() };
+            list.push(entry);
+            this.set('achievements', list);
+            return entry;
+        },
+
+        /**
+         * Today's daily challenge, or null if none has been rolled yet (or
+         * the stored one is from a previous day — gamification.js checks
+         * `.date` against the current date string and rolls a fresh one
+         * itself; this accessor is a plain passthrough, no date logic here).
+         */
+        getChallenge() {
+            return this.get('challenge', null);
+        },
+        setChallenge(challenge) {
+            return this.set('challenge', challenge);
         },
 
         getHandHistory() {
