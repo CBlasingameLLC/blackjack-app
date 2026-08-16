@@ -370,10 +370,40 @@ body {
     position: relative;
     transition: transform 0.3s ease, opacity 0.3s ease;
 }
-.hand-column.inactive { opacity: 0.4; transform: scale(0.85) translateY(-8px); pointer-events: none; }
 .hand-column.active   { opacity: 1; transform: scale(1) translateY(0); }
+.hand-column.next     { opacity: 0.75; transform: scale(0.92) translateY(-4px); }
+.hand-column.pending  { opacity: 0.55; transform: scale(0.85) translateY(-8px); pointer-events: none; }
+.hand-column.resolved { opacity: 0.45; transform: scale(0.85) translateY(-8px); pointer-events: none; filter: grayscale(0.5); }
 .hand-column.entering { opacity: 0; transform: scale(0.7) translateY(18px); }
 .hand-column.entered  { opacity: 1; transform: scale(1) translateY(0); }
+
+/* Split-only status tags (PLAYING / NEXT / DONE) — :not(:only-child) means
+   these never appear on an ordinary single-hand round, only once a split
+   actually creates sibling columns, which is exactly when "which hand am
+   I on" stops being obvious. */
+.hand-column::before {
+    content: '';
+    position: absolute;
+    top: -1.7em;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 0.62em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 0.2em 0.7em;
+    border-radius: var(--r-pill);
+    background: rgba(0, 0, 0, 0.6);
+    opacity: 0;
+}
+.hand-column.active:not(:only-child) {
+    box-shadow: 0 0 0 2px var(--gold-line);
+    border-radius: var(--r-md);
+}
+.hand-column.active:not(:only-child)::before   { content: '▶ PLAYING'; opacity: 1; color: var(--gold-strong); border: 1px solid var(--gold-line); }
+.hand-column.next:not(:only-child)::before     { content: 'NEXT'; opacity: 1; color: var(--text-mid); border: 1px solid rgba(255, 255, 255, 0.14); }
+.hand-column.resolved:not(:only-child)::before { content: '✓ DONE'; opacity: 1; color: var(--win); border: 1px solid var(--win); }
 
 /* Per-hand score badge + win/loss/push pulse (transform/opacity/color only) */
 .hand-score-badge {

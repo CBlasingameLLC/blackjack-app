@@ -132,6 +132,14 @@
          *                                                    a 3D flip off it
          *   onHandsUpdate(snapshot)               - fires after any state-affecting
          *                                            action; snapshot shape below
+         *   onHandSplit(originalHand, newHand)     - fires the instant a split is
+         *                                            confirmed, BEFORE either hand's
+         *                                            post-split card is drawn. The
+         *                                            render layer must move the
+         *                                            existing DOM card element for
+         *                                            `newHand`'s one card (popped
+         *                                            off `originalHand`) into a new
+         *                                            column for `newHand`.
          *   onRoundResolved(hands, summary)        - hands = live BJ.Hand[] (each
          *                                            has .outcome/.payout set);
          *                                            summary is a plain-object recap
@@ -153,6 +161,7 @@
                 onStateChange: null, onGameModeChange: null, onBankrollChange: null,
                 onBetChange: null, onCountChange: null, onCardDealt: null,
                 onDealerCardDealt: null, onHoleCardRevealed: null, onHandsUpdate: null,
+                onHandSplit: null,
                 onRoundResolved: null, onFeedback: null, onInsuranceOffered: null,
                 onInsuranceResolved: null, onStatsUpdate: null, onMistakeLogged: null,
                 onSettingsChange: null, onShuffle: null
@@ -167,6 +176,20 @@
 
             this.bankroll = Storage.getBankroll();
             this.settings = Storage.getSettings();
+
+            // Self-heal a broken/negative bankroll on load rather than only
+            // on the next Deal press with an empty bet (startRound() below
+            // has that same reload, but requiring that exact gesture from a
+            // player who's already stuck at e.g. -$3,000 — every chip click
+            // just rejects with "Not enough Bankroll!" — is not discoverable).
+            // Bankroll should never go negative under correct accounting
+            // (every settlement path returns escrowed stake + net payout),
+            // so this only ever fires to recover from a stale/corrupted
+            // value written before that accounting was fixed.
+            if (this.bankroll <= 0 && !this.settings.freeplay) {
+                this.bankroll = 10000;
+                Storage.setBankroll(this.bankroll);
+            }
 
             // Session stats are scoped to this GameManager instance (a fresh
             // page load = a fresh session) — start from a clean bucket every
@@ -1142,6 +1165,14 @@
                     }
                     const newHand = new Hand(hand.bet);
                     newHand.add(hand.cards.pop());
+                    // Tell the render layer to MOVE the popped card's existing
+                    // DOM element into the new hand's column before any more
+                    // cards are dealt — without this, that card's element is
+                    // orphaned in the original hand's column (a stale extra
+                    // card there) while the new hand's column renders as if
+                    // it only ever had one card (bug: split hand looked
+                    // broken/unplayable).
+                    this._emit('onHandSplit', hand, newHand);
 
                     const card1 = this._drawFromShoe();
                     this._addCardToHand(hand, card1, { isPlayer: true });
@@ -1203,6 +1234,15 @@
 
         _advanceHand() {
             this.activeHandIndex++;
+            // Split aces resolve BOTH hands in one shot (playerSplit sets
+            // .resolved on hand and newHand directly, no per-hand hit/stand
+            // in between), so a single ++ isn't always enough to land past
+            // every already-resolved hand — skip forward until we hit one
+            // that's still live, or run off the end.
+            while (this.activeHandIndex < this.playerHands.length
+                && this.playerHands[this.activeHandIndex].resolved) {
+                this.activeHandIndex++;
+            }
             if (this.activeHandIndex >= this.playerHands.length) {
                 const allDone = this.playerHands.every((h) => h.score.isBust || h.surrendered);
                 if (allDone) {
@@ -1375,6 +1415,12 @@
         }
 
         _persistBankroll() {
+            // Correct settlement accounting should never drive this below 0
+            // (every debit is gated on _hasFunds first); this is a floor,
+            // not a fix — the constructor's self-heal is what actually
+            // recovers a stale negative value from before that accounting
+            // was correct.
+            if (this.bankroll < 0) this.bankroll = 0;
             Storage.setBankroll(this.bankroll);
             this._emit('onBankrollChange', this.bankroll);
         }

@@ -134,7 +134,7 @@
             var self = this;
             var names = [
                 'onStateChange', 'onGameModeChange', 'onCardDealt', 'onDealerCardDealt',
-                'onHoleCardRevealed', 'onHandsUpdate', 'onRoundResolved', 'onFeedback',
+                'onHoleCardRevealed', 'onHandsUpdate', 'onHandSplit', 'onRoundResolved', 'onFeedback',
                 'onInsuranceResolved', 'onSettingsChange', 'onShuffle', 'onCountChange',
                 'onCorrectPlay'
             ];
@@ -260,8 +260,19 @@
          * #1's existing column; it just adds hand #2's column alongside it,
          * which is also what lets a new hand-column animate in on its own
          * (`.entering` -> `.entered`) without touching any prior DOM.
+         *
+         * @param {HTMLElement} [insertAfterEl] - when a hand is split a
+         *   SECOND time (re-splitting a hand that isn't the last one on
+         *   the table), GameManager inserts the new hand into the middle
+         *   of `playerHands` (right after the hand it split from), not at
+         *   the end. Always `appendChild`-ing here would put its column
+         *   last on screen regardless, so the visual left-to-right order
+         *   would stop matching actual play order — exactly the kind of
+         *   mismatch that gets a player clicking the wrong hand. Passing
+         *   the split-from hand's column here inserts the new column
+         *   right after it instead.
          */
-        _getOrCreateHandColumn(hand) {
+        _getOrCreateHandColumn(hand, insertAfterEl) {
             var existing = this.handColumns.get(hand);
             if (existing) return existing;
 
@@ -281,7 +292,12 @@
 
                 column.appendChild(scoreEl);
                 column.appendChild(cardsEl);
-                container.appendChild(column);
+
+                if (insertAfterEl && insertAfterEl.parentNode === container) {
+                    container.insertBefore(column, insertAfterEl.nextSibling);
+                } else {
+                    container.appendChild(column);
+                }
 
                 if (isSplitEntrance) {
                     nextPaint(function () {
@@ -294,6 +310,36 @@
             var rec = { column: column, cardsEl: cardsEl, scoreEl: scoreEl, cardEls: [] };
             this.handColumns.set(hand, rec);
             return rec;
+        }
+
+        /**
+         * `onHandSplit(originalHand, newHand)` — fires the instant a split
+         * is confirmed, before either hand's post-split card is drawn.
+         * `originalHand`'s DOM column already has 2 card elements from the
+         * initial deal, but the MODEL just popped its 2nd card off onto
+         * `newHand` — so that card's existing element has to physically
+         * MOVE into a fresh column for `newHand`, never be rebuilt (per
+         * this file's header rule). Without this move, the popped card's
+         * element stays stranded in `originalHand`'s column (a stale extra
+         * card there) while `newHand`'s column renders as if it only ever
+         * had one card — the split hand then looks broken/incomplete even
+         * though the game state underneath is correct.
+         */
+        onHandSplit(originalHand, newHand) {
+            var rec = this.handColumns.get(originalHand);
+            if (!rec || !rec.cardEls.length) return;
+
+            var movedEl = rec.cardEls.pop();
+            if (movedEl && movedEl.parentNode) movedEl.parentNode.removeChild(movedEl);
+
+            var newRec = this._getOrCreateHandColumn(newHand, rec.column);
+            if (movedEl) {
+                newRec.cardEls.push(movedEl);
+                if (newRec.cardsEl) newRec.cardsEl.appendChild(movedEl);
+            }
+
+            this._refreshHandBadge(originalHand, rec);
+            this._refreshHandBadge(newHand, newRec);
         }
 
         /**
@@ -409,18 +455,40 @@
          * hand's score badge in case a hit changed its total without a
          * fresh onCardDealt-only refresh being enough (defensive
          * idempotent re-render of TEXT ONLY, never card DOM), and (2)
-         * toggle `.active`/`.inactive` on hand columns so the CSS phase
-         * can dim the hand that isn't currently being played.
+         * toggle a 4-state class (`active`/`next`/`pending`/`resolved`) on
+         * hand columns so the CSS phase can make it unmistakable, on a
+         * split table, which hand the player is currently acting on,
+         * which one is up after it, and which one is already done —
+         * previously a resolved hand carried NEITHER `.active` nor
+         * `.inactive` and rendered pixel-identical to the live hand,
+         * which is how a player ends up clicking Hit/Stand against the
+         * wrong column mid-split.
          */
         onHandsUpdate(snapshot) {
             var self = this;
-            (snapshot.playerHands || []).forEach(function (hand, idx) {
+            var hands = snapshot.playerHands || [];
+
+            // The one hand that becomes active the moment the current hand
+            // resolves — the first unresolved hand strictly after
+            // activeHandIndex. Only ever one such hand at a time, since
+            // GameManager always plays hands out strictly left-to-right.
+            var nextIndex = -1;
+            for (var i = snapshot.activeHandIndex + 1; i < hands.length; i++) {
+                if (!hands[i].resolved) { nextIndex = i; break; }
+            }
+
+            hands.forEach(function (hand, idx) {
                 var rec = self._getOrCreateHandColumn(hand);
                 self._refreshHandBadge(hand, rec);
                 if (rec.column) {
                     var isActive = idx === snapshot.activeHandIndex;
+                    var isResolved = !isActive && hand.resolved;
+                    var isNext = !isActive && !hand.resolved && idx === nextIndex;
+                    var isPending = !isActive && !hand.resolved && !isNext;
                     rec.column.classList.toggle('active', isActive);
-                    rec.column.classList.toggle('inactive', !isActive && !hand.resolved);
+                    rec.column.classList.toggle('resolved', isResolved);
+                    rec.column.classList.toggle('next', isNext);
+                    rec.column.classList.toggle('pending', isPending);
                 }
             });
             this._refreshDealerBadge(snapshot.dealerHand);
@@ -669,7 +737,11 @@
 //     --deal-index                     (custom property, per-card stagger)
 //
 //   Hand columns (used even for a single non-split hand now):
-//     .hand-column / .hand-column.active / .hand-column.inactive
+//     .hand-column / .hand-column.active / .hand-column.next /
+//       .hand-column.pending / .hand-column.resolved
+//       (only one of active/next/pending/resolved at a time per column;
+//       the PLAYING/NEXT/DONE tags these carry only render when the table
+//       has more than one hand — see :not(:only-child) in blackjack.css)
 //     .hand-column.entering -> .hand-column.entered  (split enter animation)
 //     .hand-score-badge
 //     .hand-score-badge.winner / .loser / .push       (transient pulse)
