@@ -83,6 +83,14 @@
     // every non-insurance, non-surrender key in StrategyData.deviations is
     // currently a `hard_<total>_<dealerValue>` entry, so this drill only
     // ever needs to fabricate 2-card non-pair, non-soft hard totals.
+    // Table Simulation. Seven boxes is a full real table, and the spot count
+    // is the difficulty dial for counting practice: more boxes means more
+    // cards per round and less time to tally them. MAX_TABLE_HANDS is the
+    // higher cap that includes hands created by splits mid-round, so a table
+    // of sevens cannot expand without bound and outrun the pacing.
+    var MAX_TABLE_SPOTS = 7;
+    var MAX_TABLE_HANDS = 12;
+
     function hardDeviationKeys() {
         return Object.keys(StrategyData.deviations).filter(function (k) {
             return k.indexOf('hard_') === 0;
@@ -413,7 +421,10 @@
 
         _maybePromptCount() {
             if (!this._isCountCheckEligibleMode()) return false;
-            if (this.settings.casualMode) return false;
+            // Casual mode silences grading, but in Table Simulation the count
+            // check IS the activity - silencing it there would leave a mode
+            // that deals cards and asks nothing.
+            if (this.settings.casualMode && this.gameMode !== 'tablesim') return false;
 
             // True Count checks are reserved for the dedicated True Count
             // practice — Hard/Soft/Pairs drills only ever quiz the RUNNING
@@ -423,7 +434,13 @@
             const type = this.gameMode === 'testout' ? this.settings.countPrompt : 'running';
             if (type !== 'running' && type !== 'true') return false;
 
-            const interval = Math.max(1, this.settings.countPromptInterval || 3);
+            // Table Simulation keeps its own interval: it deals far faster
+            // than a played hand, so the cadence that suits a Play session is
+            // not the cadence that suits watching a table.
+            const configured = this.gameMode === 'tablesim'
+                ? this.settings.tableSimInterval
+                : this.settings.countPromptInterval;
+            const interval = Math.max(1, configured || 3);
             this.handsSinceCountPrompt++;
             if (this.handsSinceCountPrompt < interval) return false;
             this.handsSinceCountPrompt = 0;
@@ -494,6 +511,14 @@
             this.state = 'idle';
             this._emit('onStateChange', this.state);
             this._emit('onCountPromptResolved', { correct, expected: pending.expected, given, reanchored });
+
+            // Table Simulation parks the table on a prompt rather than ending
+            // the session, so answering is what resumes dealing. The pause is
+            // long enough to read the verdict - especially a re-anchor, which
+            // just reshuffled the shoe out from under the player.
+            if (this.gameMode === 'tablesim' && this._tableSimRunning) {
+                this._tableSimSchedule(reanchored ? 2400 : 1100);
+            }
 
             return { correct, expected: pending.expected, given, reanchored };
         }
@@ -843,6 +868,14 @@
         // --- player decisions --------------------------------------------------------
 
         _activeHand() {
+            // Table Simulation plays itself, and during it the state is
+            // legitimately 'player-turn' while the engine walks the spots. If
+            // this returned a hand, every player action below would happily
+            // act on a hand the simulation is in the middle of playing - a
+            // click on Hit would deal a card into someone else's spot. One
+            // guard here disables all five actions at once, structurally,
+            // rather than relying on the UI to hide the buttons.
+            if (this.gameMode === 'tablesim') return null;
             return this.playerHands[this.activeHandIndex];
         }
 
@@ -915,6 +948,9 @@
          */
         _isCountCheckEligibleMode() {
             if (this.gameMode === 'testout') return true;
+            // Table Simulation is a counting mode whose entire purpose is the
+            // periodic check, so it is always eligible.
+            if (this.gameMode === 'tablesim') return true;
             const isBasicDrill = this.gameMode === 'hard' || this.gameMode === 'soft' || this.gameMode === 'pairs';
             return isBasicDrill && !!this.settings.drillCountChecks && this._playsOutHand();
         }
@@ -1232,6 +1268,264 @@
             return grade;
         }
 
+        // ====================================================================
+        // TABLE SIMULATION - counting practice against a live, auto-played table
+        // ====================================================================
+        //
+        // The player makes NO strategy decisions here. Hands are dealt to
+        // several spots, played out by basic strategy, settled, and dealt
+        // again; the only thing asked of the player is the running count, at
+        // an interval they set. That is how counters actually train, and it is
+        // a genuinely different loop from every other mode in this app -
+        // nothing is graded except the count.
+        //
+        // WHY THIS LIVES INSIDE GameManager rather than beside it the way
+        // count-drills.js does for its flash cards: every card dealt here must
+        // go through `_addCardToHand`, which is the single place in the entire
+        // app that calls Count.registerCard. A second dealing path would be a
+        // second place cards get counted, and double-counting is the bug this
+        // file's header opens with. Reusing the dealing path also means the
+        // renderer draws these spots with the hand-column machinery that
+        // splits already needed, and the count quiz reuses `_maybePromptCount`
+        // / `submitCountAnswer` - including the re-anchor safeguard - unchanged.
+
+        startTableSim() {
+            this.gameMode = 'tablesim';
+            this.currentBet = 0;
+            this.insuranceBet = 0;
+            this.handsSinceCountPrompt = 0;
+            this._tableSimRunning = true;
+            this._emit('onGameModeChange', 'tablesim');
+            this._emit('onBetChange', 0);
+            // A counting session has to start from a count the player can
+            // trust. Inheriting a half-dealt shoe from whatever they were
+            // doing before would mean their first answer is graded against a
+            // number they had no way to know.
+            this.newShoe();
+            this._tableSimSchedule(400);
+            return true;
+        }
+
+        stopTableSim() {
+            this._tableSimRunning = false;
+            if (this._tableSimTimer) { clearTimeout(this._tableSimTimer); this._tableSimTimer = null; }
+            this._pendingCountPrompt = null;
+            this.state = 'idle';
+            this._emit('onStateChange', this.state);
+            return true;
+        }
+
+        isTableSimRunning() { return !!this._tableSimRunning; }
+
+        _tableSimSpots() {
+            const v = Number(this.settings.tableSimSpots);
+            return Math.max(1, Math.min(MAX_TABLE_SPOTS, Number.isFinite(v) ? Math.round(v) : 3));
+        }
+
+        _simPace() {
+            const v = Number(this.settings.tableSimSpeed);
+            return Math.max(0, Number.isFinite(v) ? v : 450);
+        }
+
+        _tableSimSchedule(ms) {
+            if (!this._tableSimRunning) return;
+            if (this._tableSimTimer) clearTimeout(this._tableSimTimer);
+            this._tableSimTimer = setTimeout(() => {
+                this._tableSimTimer = null;
+                if (this._tableSimRunning) this._tableSimRound();
+            }, ms);
+        }
+
+        /**
+         * Paced wait that doubles as the cancellation point. Resolves FALSE
+         * when the sim has been stopped, and every caller checks it - so
+         * pressing Stop mid-deal halts between cards instead of letting a
+         * whole round finish dealing into a screen the player has left.
+         */
+        _simSleep(ms) {
+            return new Promise((resolve) => {
+                if (!this._tableSimRunning) { resolve(false); return; }
+                this._tableSimTimer = setTimeout(() => {
+                    this._tableSimTimer = null;
+                    resolve(!!this._tableSimRunning);
+                }, ms);
+            });
+        }
+
+        /** The S17/H17 rule, in ONE place - dealerPlay() reads it too. */
+        _dealerMustHit() {
+            const d = this.dealerHand.score;
+            return d.total < 17 || (d.isSoft && d.total === 17 && Rules.h17);
+        }
+
+        async _tableSimRound() {
+            if (!this._tableSimRunning) return;
+
+            this.state = 'dealing';
+            this._emit('onStateChange', this.state);
+
+            this.dealerHand = new Hand();
+            this.playerHands = [];
+            const spots = this._tableSimSpots();
+            for (let i = 0; i < spots; i++) this.playerHands.push(new Hand(0));
+            this.activeHandIndex = 0;
+            if (this.shoe.needsShuffle) this._reshuffle();
+
+            const pace = this._simPace();
+
+            // Deal a pass to every spot, then one to the dealer, twice. The
+            // dealer's FIRST card is the hidden one: a real table turns its
+            // upcard first, but `_flipHoleCard` and the renderer both identify
+            // the hole card as dealerHand.cards[0], and which of the two
+            // physical cards is face down changes nothing about what a counter
+            // can see. Keeping the engine's invariant beats cosmetic realism.
+            for (let pass = 0; pass < 2; pass++) {
+                for (let i = 0; i < this.playerHands.length; i++) {
+                    if (!(await this._simSleep(pace))) return;
+                    this._addCardToHand(this.playerHands[i], this._drawFromShoe(), { isPlayer: true });
+                }
+                if (!(await this._simSleep(pace))) return;
+                this._addCardToHand(this.dealerHand, this._drawFromShoe(), { isPlayer: false, hidden: pass === 0 });
+            }
+
+            this.state = 'player-turn';
+            this._emit('onStateChange', this.state);
+
+            // The list can GROW while we walk it (a split inserts a hand right
+            // after the one that split), which is why this is an index loop
+            // over the live array rather than a forEach over a copy.
+            for (let i = 0; i < this.playerHands.length && i < MAX_TABLE_HANDS; i++) {
+                this.activeHandIndex = i;
+                this._emit('onHandsUpdate', this._snapshot());
+                if (!(await this._simPlayHand(i))) return;
+            }
+
+            this.state = 'dealer-turn';
+            this._emit('onStateChange', this.state);
+            if (!(await this._simSleep(pace))) return;
+            this._flipHoleCard();
+
+            while (this._dealerMustHit()) {
+                if (!(await this._simSleep(pace))) return;
+                this._addCardToHand(this.dealerHand, this._drawFromShoe(), { isPlayer: false });
+                this._emit('onHandsUpdate', this._snapshot());
+            }
+
+            if (!this._tableSimRunning) return;
+            this._resolveTableSim();
+        }
+
+        /** Plays one spot to completion by BASIC STRATEGY. False if stopped. */
+        async _simPlayHand(index) {
+            const pace = this._simPace();
+            let guard = 0;
+
+            while (this._tableSimRunning && guard++ < 24) {
+                const hand = this.playerHands[index];
+                if (!hand || hand.resolved) return true;
+
+                const score = hand.score;
+                if (score.isBust || score.isBlackjack || score.total >= 21) {
+                    hand.resolved = true;
+                    this._emit('onHandsUpdate', this._snapshot());
+                    return true;
+                }
+
+                const canDouble = hand.cards.length === 2;
+                const canSplit = hand.isPair && hand.cards.length === 2
+                    && this.playerHands.length < MAX_TABLE_HANDS;
+
+                // trueCount 0, deliberately. This table plays basic strategy,
+                // never index plays: a simulated table that deviated would be
+                // dealing a different game than the one the player is being
+                // asked to count, and would teach deviations by osmosis in a
+                // mode that never explains them. Surrender is off for the same
+                // reason - it removes cards from the shoe that a real
+                // basic-strategy table would have dealt.
+                const play = StrategyEngine.getOptimalPlay(
+                    hand, this.dealerHand.cards[1], 0, canDouble, canSplit, false
+                );
+
+                if (!(await this._simSleep(pace))) return false;
+
+                if (play === 'P' && canSplit) {
+                    const newHand = new Hand(0);
+                    newHand.add(hand.cards.pop());
+                    this._emit('onHandSplit', hand, newHand); // moves the card's element
+                    this._addCardToHand(hand, this._drawFromShoe(), { isPlayer: true });
+                    this._addCardToHand(newHand, this._drawFromShoe(), { isPlayer: true });
+                    this.playerHands.splice(index + 1, 0, newHand);
+                    if (hand.cards[0].rank === 'A') { hand.resolved = true; newHand.resolved = true; }
+                    this._emit('onHandsUpdate', this._snapshot());
+                    continue;
+                }
+
+                if (play === 'D' && canDouble) {
+                    this._addCardToHand(hand, this._drawFromShoe(), { isPlayer: true });
+                    hand.hasDoubled = true;
+                    hand.resolved = true;
+                    this._emit('onHandsUpdate', this._snapshot());
+                    return true;
+                }
+
+                if (play === 'H') {
+                    this._addCardToHand(hand, this._drawFromShoe(), { isPlayer: true });
+                    if (hand.score.isBust) hand.resolved = true;
+                    this._emit('onHandsUpdate', this._snapshot());
+                    continue;
+                }
+
+                hand.resolved = true; // 'S', or anything that downgraded to it
+                this._emit('onHandsUpdate', this._snapshot());
+                return true;
+            }
+            return !!this._tableSimRunning;
+        }
+
+        /**
+         * Settles the table for display only. Deliberately NOT _resolveRound:
+         * that path moves money, writes hand history and feeds the daily
+         * "hands played" challenge, none of which a counting drill should
+         * touch. Every payout here is 0 and stays 0.
+         */
+        _resolveTableSim() {
+            const dScore = this.dealerHand.score;
+            const dBust = dScore.isBust;
+
+            this.playerHands.forEach((hand) => {
+                hand.resolved = true;
+                hand.payout = 0;
+                const s = hand.score;
+                if (s.isBust) hand.outcome = 'loss';
+                else if (s.isBlackjack && !dScore.isBlackjack) hand.outcome = 'blackjack';
+                else if (dBust) hand.outcome = 'win';
+                else if (s.total > dScore.total) hand.outcome = 'win';
+                else if (s.total < dScore.total) hand.outcome = 'loss';
+                else hand.outcome = 'push';
+            });
+
+            this.state = 'resolving';
+            this._emit('onStateChange', this.state);
+            this._emit('onRoundResolved', this.playerHands.slice(), {
+                hands: this.playerHands.map((h) => ({ outcome: h.outcome, payout: 0, bet: 0, total: h.score.total, surrendered: false })),
+                dealerTotal: dScore.total,
+                dealerBust: dBust,
+                dealerBlackjack: dScore.isBlackjack,
+                insurancePayout: 0,
+                bankroll: this.bankroll
+            });
+
+            this.state = 'idle';
+            this._emit('onStateChange', this.state);
+
+            // Order matters, and matches _resolveRound: prompt FIRST (which is
+            // what captures the expected answer), and only then reshuffle,
+            // because a reshuffle zeroes the running count.
+            const prompted = this._maybePromptCount();
+            if (this.shoe.needsShuffle) this._reshuffle();
+            if (!prompted) this._tableSimSchedule(Math.max(800, this._simPace() * 2));
+        }
+
         _advanceHand() {
             this.activeHandIndex++;
             // Split aces resolve BOTH hands in one shot (playerSplit sets
@@ -1272,10 +1566,7 @@
         dealerPlay() {
             return new Promise((resolve) => {
                 const step = () => {
-                    const dScore = this.dealerHand.score;
-                    const mustHit = dScore.total < 17 || (dScore.isSoft && dScore.total === 17 && Rules.h17);
-
-                    if (mustHit) {
+                    if (this._dealerMustHit()) {
                         const delay = this.settings.gameSpeed || 0;
                         setTimeout(() => {
                             const card = this._drawFromShoe();

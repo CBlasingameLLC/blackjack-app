@@ -1706,6 +1706,42 @@ body {
     100% { opacity: 0; visibility: visible; transform: translate(-50%, -55%) scale(0.95); }
 }
 
+/* --- Table Simulation ---
+   The player makes no decisions, so the decision furniture is removed rather
+   than disabled: a greyed-out Hit button still invites the click. The hand
+   columns keep their dim/active treatment (it shows which box the dealer is
+   on) but lose the PLAYING/NEXT/DONE tags, which would claim the player is
+   acting on a hand they are only watching. */
+#blackjack-container.is-tablesim #game-controls,
+#blackjack-container.is-tablesim #bet-controls,
+#blackjack-container.is-tablesim #insurance-controls { display: none !important; }
+
+.is-tablesim .hand-column::before { content: none !important; }
+.is-tablesim .hand-column.active:not(:only-child) { box-shadow: none; }
+
+/* Up to seven boxes have to fit WITHOUT the table scrolling or clipping, and
+   clipping is the dangerous one: a box scrolled off the edge is still being
+   dealt, and its cards are still in the running count, so the player would be
+   asked for a number that includes cards they were never shown. The card size
+   is already a variable, so the boxes shrink as they multiply instead. */
+.is-tablesim .split-container { gap: 0.4em; flex-wrap: nowrap; justify-content: center; }
+.is-tablesim .hand-column { min-width: 0; }
+#blackjack-container.is-tablesim[data-spots="4"] { --card-w: 64px; --card-h: 90px; }
+#blackjack-container.is-tablesim[data-spots="5"] { --card-w: 56px; --card-h: 79px; }
+#blackjack-container.is-tablesim[data-spots="6"] { --card-w: 48px; --card-h: 67px; }
+#blackjack-container.is-tablesim[data-spots="7"] { --card-w: 42px; --card-h: 59px; }
+@media (max-width: 820px) {
+    #blackjack-container.is-tablesim[data-spots="3"] { --card-w: 56px; --card-h: 79px; }
+    #blackjack-container.is-tablesim[data-spots="4"] { --card-w: 44px; --card-h: 62px; }
+    #blackjack-container.is-tablesim[data-spots="5"] { --card-w: 36px; --card-h: 51px; }
+    #blackjack-container.is-tablesim[data-spots="6"] { --card-w: 31px; --card-h: 44px; }
+    #blackjack-container.is-tablesim[data-spots="7"] { --card-w: 27px; --card-h: 38px; }
+    .is-tablesim .split-container { gap: 0.22em; }
+    .is-tablesim .hand-score-badge { font-size: 0.6em; padding: 0.15em 0.45em; }
+}
+
+.tile--tablesim .tile__glyph { color: var(--gold-strong); }
+
 /* --- achievement / daily-challenge toasts ---
    Fixed to the viewport and owned by a body-level layer, so the same toast
    works at the table and on the hub (count drills unlock achievements too).

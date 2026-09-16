@@ -58,7 +58,15 @@
             // Speed Count / True Count drill config (shared: both flash
             // cards at this size/rate).
             speedCountSize: 52,       // cards per run
-            speedCountRate: 2         // cards per second
+            speedCountRate: 2,        // cards per second
+
+            // Table Simulation (counting practice against an auto-played
+            // table). `tableSimSpots` is the difficulty dial - more boxes is
+            // more cards per round to tally - and `tableSimInterval` is the
+            // "every so often" the player sets for the running-count check.
+            tableSimSpots: 3,         // 1-7 boxes dealt
+            tableSimSpeed: 450,       // ms between actions
+            tableSimInterval: 5       // hands between running-count checks
         };
     }
 

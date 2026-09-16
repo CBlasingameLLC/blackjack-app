@@ -329,7 +329,17 @@
             applyStatePanels(state);
             refreshActionButtons(gm);
         });
-        gm.setCallback('onHandsUpdate', function () { refreshActionButtons(gm); });
+        gm.setCallback('onHandsUpdate', function (snapshot) {
+            refreshActionButtons(gm);
+            // How many boxes are on the table drives how small the cards have
+            // to be for all of them to be visible (see .is-tablesim[data-spots]
+            // in the CSS). Read from the snapshot rather than the setting,
+            // because a split mid-round genuinely adds a column.
+            if (UI.blackjackContainer && UI.blackjackContainer.classList.contains('is-tablesim')) {
+                var n = (snapshot && snapshot.playerHands) ? snapshot.playerHands.length : 1;
+                UI.blackjackContainer.setAttribute('data-spots', String(Math.min(7, Math.max(1, n))));
+            }
+        });
         gm.setCallback('onGameModeChange', function (mode) {
             if (UI.mainMenu) UI.mainMenu.style.display = 'none';
             if (UI.blackjackContainer) UI.blackjackContainer.style.display = 'flex';
@@ -339,6 +349,10 @@
             // the discard tray. Trainer modes hide them (CSS keys off this
             // class) so the screen stays focused on the decision, not chrome.
             if (UI.blackjackContainer) UI.blackjackContainer.classList.toggle('is-testout', mode === 'testout');
+            // Table Simulation deals itself, so the CSS hides the action and
+            // bet controls entirely - a disabled Hit button still invites the
+            // click, and a mode with no decisions should not show decisions.
+            if (UI.blackjackContainer) UI.blackjackContainer.classList.toggle('is-tablesim', mode === 'tablesim');
             renderSessionStats({ sessionAccuracy: null });
             renderFinance(gm);
         });
@@ -368,6 +382,11 @@
 
         if (UI.btnReturnMenu) {
             UI.btnReturnMenu.addEventListener('click', function () {
+                // A running Table Sim owns a timer chain that keeps dealing;
+                // leaving the screen without stopping it would have the shoe
+                // burning down and count checks firing at a table nobody is
+                // looking at.
+                if (typeof gm.isTableSimRunning === 'function' && gm.isTableSimRunning()) gm.stopTableSim();
                 if (UI.blackjackContainer) UI.blackjackContainer.style.display = 'none';
                 if (UI.mainMenu) UI.mainMenu.style.display = 'flex';
             });

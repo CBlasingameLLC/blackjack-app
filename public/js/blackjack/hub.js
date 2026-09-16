@@ -211,6 +211,13 @@
         if (estim) estim.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('estimation'); });
         var trueCount = byId('btn-drill-truecount');
         if (trueCount) trueCount.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('truecount'); });
+        // Table Sim is not a count-drill screen - it runs on the real table,
+        // so it starts the engine directly and onGameModeChange reveals it.
+        var tableSim = byId('btn-table-sim');
+        if (tableSim) tableSim.addEventListener('click', function () {
+            var g = gm();
+            if (g) g.startTableSim();
+        });
 
         // NOTE: the table gear (#btn-settings) is intentionally NOT wired here
         // anymore. It opens an in-game settings overlay (ui-bindings.js) so the

@@ -24,7 +24,10 @@ win:
       arch: [x64]
   # Unsigned by choice: first run shows a SmartScreen "unknown publisher"
   # prompt once. Signing is a certificate purchase, not a config change.
-  artifactName: ${productName}-Setup-${version}.${ext}
+  # No spaces. ${productName} is "Blackjack Pro", and a filename with a space
+  # in it cannot be pasted into Explorer or Run unquoted - which is exactly how
+  # a perfectly good installer reads as a broken download link.
+  artifactName: BlackjackPro-Setup-${version}.${ext}
 
 nsis:
   oneClick: false

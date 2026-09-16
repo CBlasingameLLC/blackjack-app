@@ -109,6 +109,55 @@
                             <span class="tile__name">True Count</span>
                             <span class="tile__sub">RC ÷ decks conversion</span>
                         </button>
+                        <button id="btn-table-sim" class="tile tile--tablesim" type="button">
+                            <span class="tile__glyph"><i class="icon solid fa-users"></i></span>
+                            <span class="tile__name">Table Sim</span>
+                            <span class="tile__sub">Just keep the count</span>
+                        </button>
+                    </div>
+
+                    <!-- Table Sim is the only mode where the player makes no
+                         decisions at all: the table deals and plays itself and
+                         the only question is the running count. Spots is the
+                         difficulty dial - more boxes is more cards to tally. -->
+                    <div class="config-card">
+                        <h4 class="config-card__title"><i class="icon solid fa-users"></i> Table Sim</h4>
+
+                        <label class="settings-row settings-select-row">
+                            Spots dealt
+                            <select class="setting-control" data-setting="tableSimSpots">
+                                <option value="1">1 box</option>
+                                <option value="2">2 boxes</option>
+                                <option value="3">3 boxes</option>
+                                <option value="4">4 boxes</option>
+                                <option value="5">5 boxes</option>
+                                <option value="6">6 boxes</option>
+                                <option value="7">7 boxes (full table)</option>
+                            </select>
+                        </label>
+
+                        <label class="settings-row settings-select-row">
+                            Deal speed
+                            <select class="setting-control" data-setting="tableSimSpeed">
+                                <option value="800">Slow</option>
+                                <option value="450">Normal</option>
+                                <option value="250">Fast</option>
+                                <option value="120">Casino pace</option>
+                            </select>
+                        </label>
+
+                        <label class="settings-row settings-select-row">
+                            Ask for the count every
+                            <select class="setting-control" data-setting="tableSimInterval">
+                                <option value="1">1 hand</option>
+                                <option value="3">3 hands</option>
+                                <option value="5">5 hands</option>
+                                <option value="10">10 hands</option>
+                                <option value="15">15 hands</option>
+                            </select>
+                        </label>
+
+                        <p class="config-card__note">Miss a check and the shoe is reshuffled to a fresh zero, so one lost card can never quietly compound.</p>
                     </div>
 
                     <!-- Count Checks are a way of PLAYING, not a separate screen —
