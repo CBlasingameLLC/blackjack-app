@@ -126,6 +126,10 @@
         apFeedback: byId('ap-feedback'),
         correctCue: byId('correct-cue'),            // NEW — right-answer pop
         achievementLayer: byId('achievement-layer'), // NEW — unlock toasts
+        certStrip: byId('cert-strip'),
+        certStripVerdict: byId('cert-strip-verdict'),
+        certStripFill: byId('cert-strip-fill'),
+        certStripDetail: byId('cert-strip-detail'),
         sessionStats: byId('session-stats'),
 
         // top bar readouts
@@ -207,6 +211,41 @@
         if (!el) return;
         if (disabled) el.setAttribute('disabled', 'disabled');
         else el.removeAttribute('disabled');
+    }
+
+    /**
+     * Paints the certification strip. Three states, and they say genuinely
+     * different things: on track, still running but the bar is already out of
+     * reach, and finished. The middle one is the one that must not lie - the
+     * attempt keeps dealing, so a silent strip there would look like the exam
+     * was still winnable.
+     */
+    function renderCertification(st) {
+        if (!UI.certStrip) return;
+        if (!st) { UI.certStrip.classList.remove('is-lost', 'is-done'); return; }
+
+        if (UI.certStripFill) UI.certStripFill.style.width = st.pct + '%';
+
+        var acc = (st.accuracy === null) ? '--' : st.accuracy.toFixed(1) + '%';
+        var detail = 'Hand ' + st.handsPlayed + ' / ' + st.targetHands + '  ·  ' + acc
+            + '  ·  ' + st.decisions + ' decisions';
+
+        UI.certStrip.classList.toggle('is-done', !!st.complete);
+        UI.certStrip.classList.toggle('is-lost', !st.complete && !st.stillAchievable);
+
+        if (st.complete) {
+            if (UI.certStripVerdict) UI.certStripVerdict.textContent =
+                (st.verdict === 'passed' ? 'PASSED' : 'NOT PASSED') + ' · ' + acc;
+            detail += '  ·  ' + st.misses + ' missed';
+        } else if (!st.stillAchievable) {
+            if (UI.certStripVerdict) UI.certStripVerdict.textContent = '98% OUT OF REACH';
+            detail += '  ·  finish it for the leak report';
+        } else {
+            if (UI.certStripVerdict) UI.certStripVerdict.textContent =
+                st.missBudget + (st.missBudget === 1 ? ' miss left' : ' misses left');
+        }
+
+        if (UI.certStripDetail) UI.certStripDetail.textContent = detail;
     }
 
     /**
@@ -319,6 +358,8 @@
 
         // ---------------- GameManager -> plain display / panel wiring ----------------
         gm.setCallback('onBankrollChange', function () { renderFinance(gm); });
+        gm.setCallback('onCertificationUpdate', function (st) { renderCertification(st); });
+        gm.setCallback('onCertificationComplete', function (st) { renderCertification(st); });
         gm.setCallback('onBetChange', function (bet) { renderFinance(gm); renderBetBubble(bet); });
         gm.setCallback('onCountChange', function (info) { renderCount(info, gm.getSettings()); });
         gm.setCallback('onStatsUpdate', function (payload) { renderSessionStats(payload); });
@@ -353,6 +394,7 @@
             // bet controls entirely - a disabled Hit button still invites the
             // click, and a mode with no decisions should not show decisions.
             if (UI.blackjackContainer) UI.blackjackContainer.classList.toggle('is-tablesim', mode === 'tablesim');
+            if (UI.blackjackContainer) UI.blackjackContainer.classList.toggle('is-certify', mode === 'certify');
             renderSessionStats({ sessionAccuracy: null });
             renderFinance(gm);
         });

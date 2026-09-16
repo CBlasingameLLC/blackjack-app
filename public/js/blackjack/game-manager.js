@@ -66,6 +66,7 @@
     var Count = BJ.Count || (typeof module !== 'undefined' ? require('./count.js') : undefined);
     var StrategyEngine = BJ.StrategyEngine || (typeof module !== 'undefined' ? require('./strategy-engine.js') : undefined);
     var Storage = BJ.Storage || (typeof module !== 'undefined' ? require('./persistence.js') : undefined);
+    var Certification = BJ.Certification || (typeof module !== 'undefined' ? require('./certification.js') : undefined);
 
     var SUITS = ['♠', '♥', '♣', '♦'];
 
@@ -413,6 +414,80 @@
          * `_recordDecision` like everything else in gamification.js does —
          * it needs its own call, once per resolved Test-Out round.
          */
+        // --- Basic Strategy Certification -------------------------------
+        //
+        // 500 hands at 98% of every graded decision, basic strategy only - no
+        // counting, no deviations, no money. It is RESUMABLE because 500 hands
+        // is 45-90 minutes and an exam that punishes you for closing your
+        // laptop is an exam nobody finishes, and it ALWAYS finishes because an
+        // attempt that dies at hand 140 teaches nothing about hands 140-500.
+
+        startCertification() {
+            const rec = Storage.getCertification();
+            // Resume, never silently restart: discarding 300 completed hands
+            // because the app was closed is exactly what would make the whole
+            // thing untrustworthy. A fresh attempt starts only when there is
+            // no live one to return to.
+            if (!rec.attempt || rec.attempt.verdict !== 'active') {
+                rec.attempt = Certification.newAttempt();
+                rec.attempts = (rec.attempts || 0) + 1;
+                Storage.setCertification(rec);
+            }
+
+            this.gameMode = 'certify';
+            this.currentBet = 0;
+            this.insuranceBet = 0;
+            this.state = 'betting';
+            this._emit('onGameModeChange', 'certify');
+            this._emit('onBetChange', 0);
+            this._emit('onStateChange', this.state);
+            const st = this.getCertificationStatus();
+            this._emit('onCertificationUpdate', st);
+            return st;
+        }
+
+        getCertificationStatus() {
+            if (!Certification) return null;
+            const rec = Storage.getCertification();
+            const st = Certification.status(rec.attempt);
+            if (!st) return null;
+            return Object.assign({
+                passedAt: rec.passedAt,
+                bestAccuracy: rec.bestAccuracy,
+                attempts: rec.attempts || 0,
+                leaks: Certification.leakReport(rec.attempt)
+            }, st);
+        }
+
+        /** Discards the current attempt. The player asks for this explicitly. */
+        abandonCertification() {
+            const rec = Storage.getCertification();
+            rec.attempt = null;
+            Storage.setCertification(rec);
+            this._emit('onCertificationUpdate', null);
+            return true;
+        }
+
+        _recordCertHand() {
+            if (this.gameMode !== 'certify' || !Certification) return;
+            const rec = Storage.getCertification();
+            if (!rec.attempt || rec.attempt.verdict !== 'active') return;
+
+            Certification.recordHand(rec.attempt);
+            if (rec.attempt.verdict !== 'active') {
+                const acc = rec.attempt.decisions
+                    ? (rec.attempt.correct / rec.attempt.decisions) * 100
+                    : 0;
+                if (rec.bestAccuracy === null || acc > rec.bestAccuracy) rec.bestAccuracy = acc;
+                if (rec.attempt.verdict === 'passed' && !rec.passedAt) rec.passedAt = rec.attempt.finishedAt;
+            }
+            Storage.setCertification(rec);
+
+            const st = this.getCertificationStatus();
+            this._emit('onCertificationUpdate', st);
+            if (st && st.complete) this._emit('onCertificationComplete', st);
+        }
+
         _recordHandPlayedIfTestout() {
             if (this.gameMode !== 'testout' || !BJ.Gamification) return;
             const completions = BJ.Gamification.recordHandPlayed();
@@ -687,7 +762,9 @@
             let p1, p2;
             let dUp = this._drawFromShoe(); // default random upcard candidate
 
-            if (this.gameMode === 'testout') {
+            if (this.gameMode === 'testout' || this.gameMode === 'certify') {
+                // Certification deals a natural, unfabricated shoe: the exam
+                // has to be the real distribution of hands, not a curated one.
                 p1 = this._drawFromShoe();
                 p2 = this._drawFromShoe();
             } else if (this.gameMode === 'pairs') {
@@ -897,7 +974,11 @@
          * cards) rather than judging a single opening decision.
          */
         _playsOutHand() {
-            return this.gameMode === 'testout' || this.settings.drillStyle === 'full';
+            // Certification counts HANDS, not flash cards, so it always plays
+            // them out regardless of the drill-style setting.
+            return this.gameMode === 'testout'
+                || this.gameMode === 'certify'
+                || this.settings.drillStyle === 'full';
         }
 
         /**
@@ -1061,6 +1142,15 @@
                 if (result.challengeCompletions.length) this._emit('onChallengeCompleted', result.challengeCompletions[0]);
             }
 
+            if (mode === 'certify' && Certification) {
+                const rec = Storage.getCertification();
+                if (rec.attempt && rec.attempt.verdict === 'active') {
+                    Certification.recordDecision(rec.attempt, correct);
+                    Storage.setCertification(rec);
+                    this._emit('onCertificationUpdate', this.getCertificationStatus());
+                }
+            }
+
             const modeStats = this.sessionStats.byMode[mode];
             const sessionAccuracy = modeStats.total > 0 ? Math.round((modeStats.correct / modeStats.total) * 100) : null;
             this._emit('onStatsUpdate', { session: this.sessionStats, lifetime: this.lifetimeStats, sessionAccuracy, mode });
@@ -1118,6 +1208,16 @@
                 correctAction: ACTION_LABELS[details.optimalPlay] || details.optimalPlay
             };
             Storage.pushMistake(entry);
+            // The certification's leak report is the half of it that is worth
+            // reading whether the attempt passed or failed, so the structured
+            // entry is kept on the attempt as well as in the global log.
+            if (this.gameMode === 'certify' && Certification) {
+                const rec = Storage.getCertification();
+                if (rec.attempt && rec.attempt.verdict === 'active') {
+                    Certification.noteMistake(rec.attempt, entry);
+                    Storage.setCertification(rec);
+                }
+            }
             this._emit('onMistakeLogged', entry);
         }
 
@@ -1618,6 +1718,7 @@
             this._emit('onBetChange', 0);
 
             this._recordHandPlayedIfTestout(); // "Full Table" daily-challenge tracking
+            this._recordCertHand();            // 500-hand certification progress
             this._maybePromptCount();          // must precede the reshuffle
             if (this.shoe.needsShuffle) this._reshuffle();
         }
@@ -1689,6 +1790,7 @@
             this._emit('onBetChange', 0);
 
             this._recordHandPlayedIfTestout(); // "Full Table" daily-challenge tracking
+            this._recordCertHand();            // 500-hand certification progress
             this._maybePromptCount();          // must precede the reshuffle
             if (this.shoe.needsShuffle) this._reshuffle();
         }

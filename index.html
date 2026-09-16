@@ -90,6 +90,11 @@
                             <span class="tile__name">Targeted</span>
                             <span class="tile__sub">Your weak spots</span>
                         </button>
+                        <button id="btn-certify" class="tile tile--certify" type="button">
+                            <span class="tile__glyph"><i class="icon solid fa-certificate"></i></span>
+                            <span class="tile__name">Certification</span>
+                            <span class="tile__sub">500 hands at 98%</span>
+                        </button>
                     </div>
 
                     <h3 class="practice-section-title">Counting</h3>
@@ -317,6 +322,18 @@
         <!-- Fast positive cue on a correct decision (render.js onCorrectPlay) -->
         <div id="correct-cue" class="correct-cue" aria-hidden="true"><i class="icon solid fa-check"></i></div>
 
+        <!-- Certification progress. Only rendered in certify mode; a 500-hand
+             exam has to show where you are in it at all times, or it is just a
+             long drill with no end in sight. -->
+        <div id="cert-strip" class="cert-strip" role="status" aria-live="polite">
+            <div class="cert-strip__head">
+                <span class="cert-strip__label">Certification</span>
+                <span id="cert-strip-verdict" class="cert-strip__verdict"></span>
+            </div>
+            <div class="cert-strip__track"><div id="cert-strip-fill" class="cert-strip__fill"></div></div>
+            <span id="cert-strip-detail" class="cert-strip__detail"></span>
+        </div>
+
         <!-- Periodic count quiz (state 'count-check') -->
         <div id="count-prompt" class="count-prompt">
             <h3 id="count-prompt-title" class="count-prompt__title">What is the RUNNING count?</h3>
@@ -450,6 +467,7 @@
     <script defer src="/js/blackjack/strategy-engine.js"></script>
     <script defer src="/js/blackjack/persistence.js"></script>
     <script defer src="/js/blackjack/gamification.js"></script>
+    <script defer src="/js/blackjack/certification.js"></script>
     <script defer src="/js/blackjack/game-manager.js"></script>
     <script defer src="/js/blackjack/audio.js"></script>
     <script defer src="/js/blackjack/render.js"></script>

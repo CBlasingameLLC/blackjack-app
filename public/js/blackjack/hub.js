@@ -213,6 +213,11 @@
         if (trueCount) trueCount.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('truecount'); });
         // Table Sim is not a count-drill screen - it runs on the real table,
         // so it starts the engine directly and onGameModeChange reveals it.
+        var certify = byId('btn-certify');
+        if (certify) certify.addEventListener('click', function () {
+            var g = gm();
+            if (g) g.startCertification();
+        });
         var tableSim = byId('btn-table-sim');
         if (tableSim) tableSim.addEventListener('click', function () {
             var g = gm();

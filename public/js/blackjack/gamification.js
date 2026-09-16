@@ -63,7 +63,7 @@
         surrender: 2, targeted: 2,
         'count-running': 2, 'count-speed': 2, estimation: 2,
         'count-true': 3, deviations: 3,
-        testout: 4
+        certify: 3, testout: 4
     };
 
     // Sized against the CURVE, not against a flat 100. Under v1 a stage
@@ -117,7 +117,9 @@
             id: 'basic', order: 1, title: 'Basic Strategy',
             tagline: 'Hard, Soft & Pairs — the foundation',
             icon: 'fa-hashtag', minSamples: 30,
-            compute: function (lifetime) { return combinedAccuracy(lifetime, ['hard', 'soft', 'pairs']); }
+            // Certification decisions ARE basic-strategy decisions, graded
+            // under exam conditions, so they count toward this rung too.
+            compute: function (lifetime) { return combinedAccuracy(lifetime, ['hard', 'soft', 'pairs', 'certify']); }
         },
         {
             id: 'running-count', order: 2, title: 'Running Count',

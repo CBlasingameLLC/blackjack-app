@@ -97,6 +97,7 @@
                 'count-running': { total: 0, correct: 0 },
                 'count-true': { total: 0, correct: 0 },
                 'count-speed': { total: 0, correct: 0 },
+                certify: { total: 0, correct: 0 },
                 estimation: { total: 0, correct: 0 },
                 targeted: { total: 0, correct: 0 }
             }
@@ -248,6 +249,21 @@
          * `.date` against the current date string and rolls a fresh one
          * itself; this accessor is a plain passthrough, no date logic here).
          */
+        /**
+         * The Basic Strategy Certification record:
+         *   { attempt, passedAt, bestAccuracy, attempts }
+         * `attempt` is the current or most recent run and is what makes the
+         * 500 hands RESUMABLE - it is written after every hand, so closing the
+         * app mid-attempt costs at most the hand in progress rather than the
+         * afternoon.
+         */
+        getCertification() {
+            return Object.assign({ attempt: null, passedAt: null, bestAccuracy: null, attempts: 0 }, this.get('certification', {}));
+        },
+        setCertification(record) {
+            return this.set('certification', record);
+        },
+
         getChallenge() {
             return this.get('challenge', null);
         },
