@@ -414,5 +414,8 @@
     <script defer src="/js/blackjack/path-render.js"></script>
     <script defer src="/js/blackjack/profile-render.js"></script>
     <script defer src="/js/blackjack/hub.js"></script>
+    <!-- No-ops entirely unless window.bjDesktop exists (Electron preload only),
+         so the web and mobile builds carry it inert. -->
+    <script defer src="/js/blackjack/desktop-sync.js"></script>
 </body>
 </html>

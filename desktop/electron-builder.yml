@@ -1,0 +1,40 @@
+appId: com.cblasingame.blackjackpro
+productName: Blackjack Pro
+copyright: Copyright (c) CBlasingame LLC
+
+directories:
+  output: release
+  buildResources: build
+
+# The engine is NOT vendored into desktop/. `npm run dist` builds the shared
+# renderer at the repo root first, and it is carried in as a resource - so the
+# packaged app runs byte-identical files to the web and mobile builds.
+extraResources:
+  - from: ../dist
+    to: renderer
+
+files:
+  - src/**/*
+  - mcp/**/*
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Unsigned by choice: first run shows a SmartScreen "unknown publisher"
+  # prompt once. Signing is a certificate purchase, not a config change.
+  artifactName: ${productName}-Setup-${version}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Blackjack Pro
+
+publish:
+  provider: github
+  owner: CBlasingameLLC
+  repo: blackjack-app

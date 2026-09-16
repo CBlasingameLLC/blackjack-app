@@ -1,0 +1,26 @@
+{
+  "name": "blackjack-pro-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Blackjack Pro for Windows - the same trainer, packaged, with a readable data folder and a read-only MCP server.",
+  "type": "module",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "npm --prefix .. run build && electron .",
+    "dist": "npm --prefix .. run build && node scripts/dist.js",
+    "verify:data": "node scripts/verify-data.js",
+    "mcp": "node mcp/server.js",
+    "verify:smoke": "electron scripts/smoke.js",
+    "verify": "npm run verify:data && npm run verify:mcp && npm run verify:smoke",
+    "verify:mcp": "node scripts/verify-mcp.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "electron-updater": "^6.3.9",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3"
+  }
+}
