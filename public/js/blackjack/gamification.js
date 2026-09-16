@@ -38,10 +38,60 @@
     var Storage = BJ.Storage || (typeof module !== 'undefined' ? require('./persistence.js') : undefined);
 
     var MASTERY_THRESHOLD_PCT = 90;
-    var XP_PER_LEVEL = 100;
-    var CHALLENGE_XP_REWARD = 10;
-    var STAGE_XP_BONUS = 25;
-    var LADDER_COMPLETE_XP_BONUS = 100;
+    // --- the XP curve (v2) ----------------------------------------------
+    // v1 was FLAT: `level = 1 + floor(xp / 100)`, with every correct decision
+    // worth exactly 1 XP. Level 40 therefore cost precisely what level 2 cost
+    // — 100 decisions, about three minutes of flash-card drilling — forever.
+    // A rank that arrives on a metronome is not a rank, it is a clock.
+    //
+    // Reaching level n now costs LEVEL_BASE * n * (n - 1) XP in total, so the
+    // step from n to n+1 costs LEVEL_BASE * 2n: 25 XP to reach level 2, 250
+    // to reach 5, 1,125 for 10, 4,750 for 20, 30,625 for 50. The opening
+    // levels are deliberately almost free — that stretch is retention, not
+    // achievement — and the grind arrives later, which is where it belongs.
+    var LEVEL_BASE = 12.5;
+
+    // A decision is worth what it actually costs to make. This weighting is
+    // what makes a longer climb pull the player UP the ladder rather than
+    // rewarding whichever drill they can click through fastest: a Test Out
+    // decision is graded on basic strategy AND the running count AND the true
+    // count AND the deviation chart, where a hard-totals flash card is one
+    // table lookup. An unlisted mode is worth 1 — new modes must opt IN to
+    // being worth more, so nothing silently inflates.
+    var XP_BY_MODE = {
+        hard: 1, soft: 1, pairs: 1,
+        surrender: 2, targeted: 2,
+        'count-running': 2, 'count-speed': 2, estimation: 2,
+        'count-true': 3, deviations: 3,
+        testout: 4
+    };
+
+    // Sized against the CURVE, not against a flat 100. Under v1 a stage
+    // mastery was worth a quarter of any level ever; these are one-off and
+    // once-a-day events and have to still read as events at level 30.
+    var CHALLENGE_XP_REWARD = 25;
+    var STAGE_XP_BONUS = 150;
+    var LADDER_COMPLETE_XP_BONUS = 500;
+
+    /** Total XP required to REACH level n. Level 1 is the floor, at 0 XP. */
+    function xpToReachLevel(n) { return LEVEL_BASE * n * (n - 1); }
+
+    /**
+     * Inverts xpToReachLevel. The closed form is exact in principle, but it
+     * is corrected by two cheap loops rather than trusted: a float sqrt
+     * landing on 4.999999 at an exact level boundary would report the level
+     * below the one the player just earned, which is the kind of off-by-one
+     * nobody reports and everybody feels.
+     */
+    function levelForXP(xp) {
+        var x = Math.max(0, xp || 0);
+        var n = Math.floor((1 + Math.sqrt(1 + (4 * x) / LEVEL_BASE)) / 2);
+        while (xpToReachLevel(n + 1) <= x) n++;
+        while (n > 1 && xpToReachLevel(n) > x) n--;
+        return Math.max(1, n);
+    }
+
+    function xpForDecision(mode) { return XP_BY_MODE[mode] || 1; }
 
     var RANK_TITLES = ['Novice', 'Strategist', 'Counter', 'Advantage Player', 'Card Sharp', 'Master Counter'];
 
@@ -305,9 +355,21 @@
             };
         },
 
-        getLevel: function (xp) { return 1 + Math.floor((xp || 0) / XP_PER_LEVEL); },
-        getXPIntoLevel: function (xp) { return (xp || 0) % XP_PER_LEVEL; },
-        getXPPerLevel: function () { return XP_PER_LEVEL; },
+        getLevel: function (xp) { return levelForXP(xp); },
+        getXPIntoLevel: function (xp) { return Math.max(0, (xp || 0) - xpToReachLevel(levelForXP(xp))); },
+        /**
+         * The span of the level `xp` currently sits in. This USED to be a
+         * constant and is now a function of where you are, so every caller
+         * has to pass the xp — a bare call would silently describe level 1's
+         * 25-XP span while the player stood in level 20's 500-XP one, and the
+         * progress bar would read as nearly full at all times.
+         */
+        getXPPerLevel: function (xp) {
+            var n = levelForXP(xp);
+            return xpToReachLevel(n + 1) - xpToReachLevel(n);
+        },
+        /** Exposed so the UI can show what a decision in this mode is worth. */
+        xpForDecision: xpForDecision,
 
         /**
          * THE hook — call once per graded decision, from
@@ -320,7 +382,7 @@
         onDecision: function (mode, correct) {
             var p = Storage.getProgression();
             if (correct) {
-                p.xp += 1;
+                p.xp += xpForDecision(mode);
                 p.currentStreak += 1;
                 if (p.currentStreak > p.bestStreak) p.bestStreak = p.currentStreak;
             } else {

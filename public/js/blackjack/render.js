@@ -122,6 +122,11 @@
 
             this._feedbackTimer = null;
             this._bannerTimer = null;
+
+            // Achievement/challenge toasts are shown one at a time — a single
+            // decision can unlock a badge AND finish the daily challenge.
+            this._toastQueue = [];
+            this._toastShowing = false;
         }
 
         /**
@@ -136,7 +141,7 @@
                 'onStateChange', 'onGameModeChange', 'onCardDealt', 'onDealerCardDealt',
                 'onHoleCardRevealed', 'onHandsUpdate', 'onHandSplit', 'onRoundResolved', 'onFeedback',
                 'onInsuranceResolved', 'onSettingsChange', 'onShuffle', 'onCountChange',
-                'onCorrectPlay'
+                'onCorrectPlay', 'onAchievementsUnlocked', 'onChallengeCompleted'
             ];
             names.forEach(function (name) {
                 if (typeof self[name] === 'function') {
@@ -688,6 +693,128 @@
             this._correctTimer = setTimeout(function () {
                 if (self.ui.correctCue) self.ui.correctCue.classList.remove('show');
             }, 700);
+        }
+
+        // ============================================================
+        // ACHIEVEMENT / CHALLENGE TOASTS
+        // ============================================================
+
+        /**
+         * `onAchievementsUnlocked(list)` — game-manager.js has emitted this
+         * (and onChallengeCompleted) since the gamification layer landed, and
+         * NOTHING subscribed to either one. An unlocked achievement was
+         * therefore visible only if the player later opened the Profile tab
+         * and happened to notice a badge that had quietly gone gold. Earning
+         * something has to be an event at the moment it is earned; a silent
+         * reward is indistinguishable from no reward.
+         *
+         * `list` items carry `{ id, title, description, icon, unlockedAt }`
+         * (see gamification.js's checkAchievements).
+         */
+        onAchievementsUnlocked(list) {
+            var self = this;
+            (list || []).forEach(function (a) {
+                self._queueToast({
+                    kicker: 'Achievement Unlocked',
+                    title: a.title,
+                    desc: a.description,
+                    icon: a.icon || 'fa-trophy',
+                    cls: 'achv-toast--achievement'
+                });
+            });
+        }
+
+        /**
+         * `onChallengeCompleted(challenge)` — the stored challenge record
+         * carries only ids and counters, so the human-readable half comes
+         * from describeChallenge. Guarded: a toast is the least important
+         * thing on screen and must never be the thing that throws inside a
+         * game-loop callback.
+         */
+        onChallengeCompleted(challenge) {
+            var d = null;
+            try {
+                if (BJ.Gamification && challenge) d = BJ.Gamification.describeChallenge(challenge);
+            } catch (err) { d = null; }
+            this._queueToast({
+                kicker: 'Daily Challenge Complete',
+                title: (d && d.title) || 'Challenge Complete',
+                desc: (d && d.description) || '',
+                icon: 'fa-calendar-check',
+                cls: 'achv-toast--challenge'
+            });
+        }
+
+        /**
+         * Toasts QUEUE rather than stack or overwrite. One Test Out decision
+         * can finish a stage mastery AND the daily challenge at once, and
+         * three cards landing in the same corner of the screen together reads
+         * as a glitch rather than as three rewards.
+         */
+        _queueToast(item) {
+            if (!this.ui.achievementLayer) return;
+            this._toastQueue.push(item);
+            if (!this._toastShowing) this._drainToasts();
+        }
+
+        _drainToasts() {
+            var layer = this.ui.achievementLayer;
+            if (!layer) return;
+            var item = this._toastQueue.shift();
+            if (!item) { this._toastShowing = false; return; }
+            this._toastShowing = true;
+
+            var el = document.createElement('div');
+            el.className = 'achv-toast ' + (item.cls || '');
+
+            var iconWrap = document.createElement('span');
+            iconWrap.className = 'achv-toast__icon';
+            var glyph = document.createElement('i');
+            glyph.className = 'icon solid ' + item.icon;
+            iconWrap.appendChild(glyph);
+
+            var text = document.createElement('div');
+            text.className = 'achv-toast__text';
+            var kicker = document.createElement('span');
+            kicker.className = 'achv-toast__kicker';
+            kicker.textContent = item.kicker;
+            var title = document.createElement('span');
+            title.className = 'achv-toast__title';
+            title.textContent = item.title;
+            text.appendChild(kicker);
+            text.appendChild(title);
+            if (item.desc) {
+                var desc = document.createElement('span');
+                desc.className = 'achv-toast__desc';
+                desc.textContent = item.desc;
+                text.appendChild(desc);
+            }
+
+            el.appendChild(iconWrap);
+            el.appendChild(text);
+            layer.appendChild(el);
+            // Forced reflow rather than nextPaint's double-rAF, for the same
+            // reason onCorrectPlay uses one: rAF does not fire at all on a
+            // throttled compositor (a backgrounded window), which would add
+            // the toast to the DOM and then never reveal it. A reflow is
+            // synchronous and always gives the transition a state to move
+            // away from.
+            void el.offsetWidth;
+            el.classList.add('show');
+
+            var self = this;
+            // Timer-driven, never animationend/transitionend: a throttled
+            // compositor (backgrounded window, slow frame) would leave a
+            // toast waiting on an event it never receives, and because the
+            // queue drains from that same callback it would wedge and
+            // silence every achievement earned afterwards.
+            setTimeout(function () {
+                el.classList.remove('show');
+                setTimeout(function () {
+                    if (el.parentNode) el.parentNode.removeChild(el);
+                    self._drainToasts();
+                }, 340);
+            }, 2600);
         }
 
         /**

@@ -125,6 +125,7 @@
         gameMessage: byId('game-message'),
         apFeedback: byId('ap-feedback'),
         correctCue: byId('correct-cue'),            // NEW — right-answer pop
+        achievementLayer: byId('achievement-layer'), // NEW — unlock toasts
         sessionStats: byId('session-stats'),
 
         // top bar readouts

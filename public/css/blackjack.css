@@ -1706,6 +1706,85 @@ body {
     100% { opacity: 0; visibility: visible; transform: translate(-50%, -55%) scale(0.95); }
 }
 
+/* --- achievement / daily-challenge toasts ---
+   Fixed to the viewport and owned by a body-level layer, so the same toast
+   works at the table and on the hub (count drills unlock achievements too).
+   Only transform/opacity animate — same GPU-compositing rule as every other
+   motion in this file. */
+.achv-layer {
+    position: fixed;
+    top: max(0.9em, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 400;                  /* above the table, the hub and the overlays */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5em;
+    pointer-events: none;          /* never steals a tap from the game beneath */
+    width: min(92vw, 27em);
+}
+.achv-toast {
+    display: flex;
+    align-items: center;
+    gap: 0.75em;
+    width: 100%;
+    padding: 0.7em 1em;
+    border-radius: var(--r-lg);
+    background: linear-gradient(180deg, var(--surface-3) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--gold-line);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    transform: translateY(-14px) scale(0.96);
+    transition: opacity 0.3s ease, transform 0.34s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.achv-toast.show { opacity: 1; transform: translateY(0) scale(1); }
+.achv-toast__icon {
+    flex: 0 0 auto;
+    width: 2.1em;
+    height: 2.1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 1em;
+    background: rgba(227, 193, 111, 0.14);
+    border: 1px solid var(--gold-line);
+    color: var(--gold);
+}
+.achv-toast__text { display: flex; flex-direction: column; gap: 0.1em; min-width: 0; }
+.achv-toast__kicker {
+    font-family: var(--font-mono);
+    font-size: 0.6em;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    /* tracked-out uppercase spaces the WORD gaps too, so they need pulling back */
+    word-spacing: -0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+.achv-toast__title {
+    font-size: 0.95em;
+    font-weight: 700;
+    color: var(--text-hi);
+    line-height: 1.2;
+}
+.achv-toast__desc {
+    font-size: 0.72em;
+    color: var(--text-mid);
+    line-height: 1.35;
+}
+.achv-toast--challenge .achv-toast__icon {
+    background: rgba(70, 201, 138, 0.14);
+    border-color: var(--win);
+    color: var(--win);
+}
+.achv-toast--challenge .achv-toast__kicker { color: var(--win); }
+@media (prefers-reduced-motion: reduce) {
+    .achv-toast { transition: opacity 0.2s ease; transform: none; }
+    .achv-toast.show { transform: none; }
+}
+
 /* --- count quiz overlay (state 'count-check') --- */
 .count-prompt {
     display: none;                 /* ui-bindings.js showPanel -> flex */

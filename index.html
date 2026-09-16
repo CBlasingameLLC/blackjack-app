@@ -387,6 +387,12 @@
         </div>
     </aside>
 
+    <!-- Achievement / challenge toasts. Deliberately a direct child of <body>:
+         achievements unlock during the count drills too, which render on the
+         hub and not at the table, and a body-level layer is also out of reach
+         of any clipped or transformed ancestor. -->
+    <div id="achievement-layer" class="achv-layer" role="status" aria-live="polite"></div>
+
     <script defer src="/js/blackjack/rules.js"></script>
     <script defer src="/js/blackjack/shoe.js"></script>
     <script defer src="/js/blackjack/hand.js"></script>

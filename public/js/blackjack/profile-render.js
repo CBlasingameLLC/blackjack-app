@@ -40,7 +40,7 @@
         var ladder = Gam.getLadderStatus();
         var level = Gam.getLevel(progression.xp);
         var xpIntoLevel = Gam.getXPIntoLevel(progression.xp);
-        var xpPerLevel = Gam.getXPPerLevel();
+        var xpPerLevel = Gam.getXPPerLevel(progression.xp);
 
         var card = el('div', 'rank-header');
         card.appendChild(el('span', 'rank-header__title', ladder.rankTitle));
