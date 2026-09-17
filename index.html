@@ -5,7 +5,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="6-deck S17 blackjack simulator with Hi-Lo counting, basic strategy grading, and Illustrious 18 deviation training." />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+    <!-- SELF-HOSTED, not the CDN. Every icon in this app is a Font Awesome
+         glyph, and the desktop build is an offline training tool: a rail whose
+         five destinations are icon-led cannot depend on a network request that
+         is simply absent on a plane. The webfont is the solid weight only,
+         which is all 34 icons here use. Font Awesome Free 5.15.4 — icons CC BY
+         4.0, fonts SIL OFL 1.1, code MIT; the license header is preserved at
+         the top of the stylesheet. -->
+    <link rel="stylesheet" href="/css/fontawesome.min.css" />
     <link rel="stylesheet" href="/css/base.css" />
     <link rel="stylesheet" href="/css/blackjack.css" />
     <link rel="manifest" href="/manifest.json">
@@ -16,6 +23,25 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Blackjack Pro">
     <meta name="theme-color" content="#0a0a0c">
+
+    <!-- DESKTOP ACTIVATION. The preload runs at document-start, so
+         window.bjDesktop already exists by the time this parses — which is
+         what lets the decision be made synchronously, before a single pixel
+         of the phone layout is painted. The stylesheet is appended rather
+         than shipped as a static <link> so the web and mobile builds never
+         download a byte of it, and every rule inside it is ALSO gated on
+         .is-desktop-app, so the class and the stylesheet can never disagree
+         about which layout is in force. -->
+    <script>
+        (function () {
+            if (!window.bjDesktop) return;
+            document.documentElement.classList.add('is-desktop-app');
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = '/css/desktop.css';
+            document.head.appendChild(link);
+        })();
+    </script>
 </head>
 <body>
     <!-- Boot splash -->
@@ -50,6 +76,11 @@
                  find them regardless of which panel they now live in. -->
             <section class="hub-panel" data-panel="practice">
                 <div class="hub-scroll practice-panel">
+                  <!-- Two neutral groups. On phone .practice-col is a plain
+                       flex column, so these render exactly as the flat list
+                       did; on desktop they become the two columns of a grid.
+                       Shared markup, one layout decision, no fork. -->
+                  <div class="practice-col practice-col--modes">
                     <div class="option-row">
                         <span class="option-row__label">Drill style</span>
                         <div class="segmented" id="drill-style-toggle" role="group" aria-label="Drill style">
@@ -121,6 +152,9 @@
                         </button>
                     </div>
 
+                  </div><!-- /practice-col--modes -->
+
+                  <div class="practice-col practice-col--config">
                     <!-- Table Sim is the only mode where the player makes no
                          decisions at all: the table deals and plays itself and
                          the only question is the running count. Spots is the
@@ -200,6 +234,7 @@
                             </select>
                         </div>
                     </div>
+                  </div><!-- /practice-col--config -->
                 </div>
             </section>
 
@@ -263,6 +298,13 @@
         </div>
 
         <nav class="hub__nav" aria-label="Sections">
+            <!-- Rail-only brand. Hidden on phone (the wordmark lives in
+                 .hub__top there); on desktop the rail is the full-height
+                 spine and wants its own head. -->
+            <span class="rail-brand" aria-hidden="true">
+                <span class="rail-brand__mark"><i class="icon solid fa-chess-board"></i></span>
+                <span class="rail-brand__text">Blackjack<em>Pro</em></span>
+            </span>
             <button class="hub-tab active" data-tab="path" type="button"><i class="icon solid fa-route"></i><span>Path</span></button>
             <button class="hub-tab" data-tab="practice" type="button"><i class="icon solid fa-dumbbell"></i><span>Practice</span></button>
             <button class="hub-tab" data-tab="charts" type="button"><i class="icon solid fa-th"></i><span>Charts</span></button>

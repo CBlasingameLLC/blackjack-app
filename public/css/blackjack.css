@@ -18,6 +18,11 @@
    0. TOKENS
    ========================================= */
 :root {
+    /* Native controls (select popups, checkboxes, scrollbars) follow this.
+       Without it Chromium paints a select's menu in the SYSTEM light theme,
+       so every dropdown in a near-black app opened as a white sheet. */
+    color-scheme: dark;
+
     /* Surfaces — near-black base + elevated charcoal steps */
     --bg-base:    #0a0a0c;
     --surface-1:  #101013;   /* dashboard, menu backdrop */
@@ -899,15 +904,36 @@ body {
     cursor: pointer;
 }
 .settings-select-row { justify-content: space-between; }
-.settings-panel select {
-    background: var(--surface-3);
+
+/* EVERY select, not just the ones inside .settings-panel. The Table Sim and
+   Count Checks cards use the same .settings-row markup but live in a
+   .config-card, so they fell outside that selector and rendered as raw
+   native controls — a white box in a near-black app. `appearance: none` is
+   the load-bearing half: without it Chromium keeps painting the platform
+   widget and the background/colour set here are simply ignored. */
+.settings-panel select,
+.settings-row select,
+.option-row select,
+#count-interval {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: var(--surface-3);
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23a9b4bb' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 10px 7px;
     color: var(--text-hi);
     border: 1px solid var(--gold-line);
-    padding: 5px 8px;
+    padding: 5px 26px 5px 8px;
     border-radius: var(--r-sm);
     outline: none;
+    cursor: pointer;
     font-family: var(--font-ui);
 }
+.settings-panel select:focus-visible,
+.settings-row select:focus-visible,
+.option-row select:focus-visible,
+#count-interval:focus-visible { border-color: var(--gold); }
 .settings-heading {
     font-size: 0.72em;
     color: var(--gold);
@@ -1417,6 +1443,17 @@ body {
    of content in a single scroll, so give each a consistent rhythm.
    ========================================= */
 .practice-panel, .profile-panel { display: flex; flex-direction: column; gap: 0.9em; padding-bottom: 0.6em; }
+
+/* The practice panel's two groups (modes, then their configuration). On phone
+   these are transparent: each is a plain flex column carrying the same gap the
+   panel itself used, so the markup renders exactly as the flat list did. They
+   exist so the desktop skin has two things to make two columns out of, without
+   either platform getting its own copy of the markup. */
+.practice-col { display: flex; flex-direction: column; gap: 0.9em; min-width: 0; }
+
+/* Rail-only brand block. The phone's wordmark lives in .hub__top; this is the
+   full-height rail's own head and is inert here. */
+.rail-brand { display: none; }
 .practice-section-title {
     margin: 0.4em 0 0;
     font-size: 0.78em;
@@ -1605,6 +1642,21 @@ body {
 .achv-card__title { font-size: 0.76em; font-weight: 700; color: var(--text-hi); }
 .achv-card__desc { font-size: 0.64em; color: var(--text-lo); line-height: 1.35; }
 .achv-card__date { font-size: 0.6em; color: var(--gold); font-family: var(--font-mono); margin-top: 0.1em; }
+
+/* A COLUMN FLEX CONTAINER WITH align-items OTHER THAN `stretch` SIZES ITS
+   CHILDREN TO max-content, NOT to the box. So a label longer than its card
+   does not wrap — it runs straight out of the side and, because both .tile
+   and .achv-card clip, it is silently cut off with no scrollbar and nothing
+   on screen to say text is missing. It bites hardest on the longest names
+   ("500 hands at 98%", "No misses logged yet"), which are exactly the ones
+   carrying information. max-width bounds the cross size so the text wraps
+   inside the card instead. */
+.tile__name, .tile__sub,
+.achv-card__title, .achv-card__desc, .achv-card__date { max-width: 100%; }
+
+/* Same family: a nested flex row needs min-width:0 or its own content sets
+   the floor and the parent's min-width:0 buys nothing. */
+.ladder-stage__title-row { min-width: 0; }
 
 /* --- discard tray: a plain visual stack, no number on it by design.
    Height of the fill is driven by --tray-fill (render.js / count-drills.js)

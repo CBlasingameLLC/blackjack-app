@@ -1,0 +1,820 @@
+/* ==========================================================================
+   BLACKJACK PRO — DESKTOP
+   The Electron build's own skin. Loaded by nothing else: index.html appends
+   it only when window.bjDesktop exists, and every rule below is ALSO gated on
+   html.is-desktop-app, so the class and the stylesheet cannot disagree about
+   which layout is in force.
+
+   WHY THIS IS A STYLESHEET AND NOT A SECOND APP. Every surface in this
+   product is drawn from custom properties, so a distinct identity is a token
+   swap plus a layout, not a fork. There is exactly one copy of the markup and
+   exactly one copy of the engine; a strategy fix lands on the phone and the
+   desktop in the same commit, which is the whole reason desktop/ contains no
+   lib/ directory.
+
+   THE IDENTITY: gold is demoted to MONEY, and the chrome goes cold.
+   On the phone, gold is the accent AND the bankroll colour, which is fine on
+   a 6-inch screen showing one thing at a time. On a 1280px training station
+   showing a ladder, a heatmap and a bankroll at once, one colour meaning both
+   "this is important" and "this is cash" is a colour meaning neither. So:
+
+       ice   (--gold, remapped)  the instrument — nav, headings, progress
+       gold  (--money)           money — bankroll, bet, chips, a push
+       green (--win)             correct, won, mastered
+       red   (--loss)            wrong, lost
+
+   Remapping --gold rather than rewriting four hundred rules is deliberate:
+   every existing surface re-skins itself, and the handful of places that are
+   genuinely about money are re-gilded explicitly in §2.
+
+   THE LAYOUT CONTRACT: NOTHING SCROLLS. No screen, no panel, no page. The
+   only exceptions are the four designated wells in §10 — bounded cards whose
+   content is genuinely unbounded (your mistake log has no maximum length) —
+   and each of those is a fixed box on screen in full, scrolling inside
+   itself with no visible scrollbar. The floor is 1280x800 of CONTENT, which
+   main.js enforces as a real window minimum, and smoke.js asserts by walking
+   every screen and failing on any element that overflows and is not a well.
+
+   Structure:
+     0. Activation + tokens      1. Density & geometry
+     2. Money vs instrument      3. The shell (rail + content)
+     4. The rail                 5. Screen header
+     6. Path                     7. Practice
+     8. Charts                   9. Stats
+    10. Profile                 11. Designated scroll wells
+    12. The table               13. Count drills, overlays, toasts
+   ========================================================================== */
+
+/* =========================================
+   0. TOKENS — the desktop identity
+   ========================================= */
+html.is-desktop-app {
+    /* Surfaces: cool graphite. The phone's near-black is warm and lounge-ish;
+       this is the same darkness under a colder light. */
+    --bg-base:   #07090b;
+    --surface-1: #0d1216;
+    --surface-2: #12181d;
+    --surface-3: #1a232a;
+    --surface-4: #243038;
+    --felt-glow: rgba(20, 68, 60, 0.38);
+
+    /* The instrument accent. --gold is REMAPPED, not shadowed: every rule in
+       blackjack.css that reaches for the accent gets this instead. */
+    --gold:        #6fd8ee;
+    --gold-strong: #a6e9f7;
+    --gold-deep:   #2b7f96;
+    --gold-line:   rgba(111, 216, 238, 0.22);
+
+    /* The real gold, kept for money and nothing else. */
+    --money:        #e3c16f;
+    --money-strong: #f4d98a;
+    --money-line:   rgba(227, 193, 111, 0.30);
+
+    /* A push returns your stake, so it is money, not instrumentation.
+       Leaving it aliased to --gold would have painted it ice — one shade off
+       --win, which is the single worst pair of outcomes to confuse. */
+    --push: var(--money);
+
+    --hairline:      rgba(158, 200, 215, 0.11);
+    --hairline-soft: rgba(158, 200, 215, 0.06);
+
+    --text-hi:  #eef3f5;
+    --text-mid: rgba(238, 243, 245, 0.60);
+    --text-lo:  rgba(238, 243, 245, 0.34);
+
+    /* Sharper geometry. Phone radii on a 1280px screen read as a blown-up
+       app; an instrument has corners. --r-pill is untouched because progress
+       tracks and count badges are genuinely capsules. */
+    --r-sm: 4px;
+    --r-md: 6px;
+    --r-lg: 9px;
+    --r-xl: 12px;
+
+    /* Held down deliberately. At 146px the player's hand needed more room than
+       the felt has between the bet spot and the action bar, and a flex row
+       that is allowed to shrink does not report that — it just draws the
+       cards past its own bottom edge and under the dashboard. */
+    --card-w: 96px;
+    --card-h: 134px;
+    --card-overlap: -58px;
+
+    /* The rail, and the height of the action block at its foot. Two numbers,
+       referenced by the four rules in section 3 and by nothing else. */
+    --rail-w: 216px;
+    --cta-h: 108px;
+    --gutter: 22px;
+}
+
+/* =========================================
+   1. DENSITY & GEOMETRY
+   Almost every size in blackjack.css is an em, so the root size is one lever
+   over the whole app. 15px rather than 16 is what turns a phone layout at
+   desktop width from "large" into "dense".
+   ========================================= */
+.is-desktop-app body {
+    font-size: 15px;
+    /* The felt vignette belongs to the table, not to every screen. */
+    background: var(--bg-base);
+}
+
+/* The chrome loses the serif. Playfair is the phone's voice; a training
+   station speaks in a monospaced, tracked-out register — and the numbers all
+   over this app (counts, accuracy, bankroll) want tabular figures anyway. */
+.is-desktop-app {
+    --font-display: var(--font-mono);
+}
+.is-desktop-app .stats-headline__value,
+.is-desktop-app .readout__value,
+.is-desktop-app .ladder-meter__label,
+.is-desktop-app .challenge-card__count {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Segmented controls square off — the one place the pill radius is wrong for
+   this skin. */
+.is-desktop-app .segmented { border-radius: var(--r-sm); padding: 2px; }
+.is-desktop-app .seg { border-radius: 3px; font-size: 0.72em; letter-spacing: 0.6px; }
+
+/* =========================================
+   2. MONEY VS INSTRUMENT
+   Everything that is literally cash is re-gilded here, because §0 just took
+   gold away from it. This list IS the definition of "money" in this app.
+   ========================================= */
+.is-desktop-app .readout__value--bankroll,
+.is-desktop-app #ui-bet,
+.is-desktop-app .table-bet-bubble,
+.is-desktop-app #insurance-bet-area {
+    color: var(--money);
+}
+.is-desktop-app .table-bet-bubble { border-color: var(--money-line); }
+.is-desktop-app .bet-spot-ring { border-color: var(--money-line); }
+
+/* The true count is an instrument reading, and stays ice by inheriting the
+   remapped accent — stated here so the split is visible in one place. */
+.is-desktop-app .readout__value--tc { color: var(--gold); }
+
+/* =========================================
+   3. THE SHELL — rail beside content
+   The bottom bar becomes a full-height left rail, which frees the entire
+   window height for the panel and gets rid of the one thing the phone layout
+   most obviously was: a strip of five evenly-spread thumb targets.
+
+   WHY THIS IS ABSOLUTE POSITIONING AND NOT A GRID. `display: grid` on .hub is
+   the obvious construction and it does not work: hub.js shows and hides the
+   hub with `menu.style.display = 'flex'` / `'none'`, and an inline style beats
+   every stylesheet. Writing `grid !important` would win that fight and then
+   win the WRONG one too — it would also beat the `display: none` that hides
+   the hub when a game starts, so the hub would sit on top of the table
+   forever. .hub is already `position: absolute; inset: 0`, so pinning the two
+   rail pieces to its own box gets the same layout, leaves the show/hide
+   contract completely untouched, and needs no change to any shared JS.
+   ========================================= */
+/* FIRST, NEUTRALISE THE PHONE'S OWN DESKTOP BLOCK. blackjack.css carries a
+   `@media (min-width: 900px)` section that centres the phone layout in a
+   620px column and reserves 340px of every window for a companion rail. That
+   block IS what the desktop looked like before this file existed, and every
+   constraint in it is now wrong — its `max-width: 620px` on .hub__body is
+   what collapsed the practice grid's left column to 208px, and its `margin:
+   auto` fights the rail for the left edge. Undone here, in one place, rather
+   than out-specified rule by rule further down where the reason would be
+   invisible. This must stay ABOVE the rail rules: same specificity, so source
+   order decides. */
+.is-desktop-app .hub__top,
+.is-desktop-app .hub__body,
+.is-desktop-app .hub__cta {
+    max-width: none;
+    width: auto;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.is-desktop-app .hub { background: var(--bg-base); }
+
+.is-desktop-app .hub__nav {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: var(--cta-h);
+    width: var(--rail-w);
+}
+.is-desktop-app .hub__cta {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: var(--rail-w);
+    height: var(--cta-h);
+}
+/* Both are out of the column's flow now, so .hub__body's flex:1 takes the
+   whole height below the header on its own. */
+.is-desktop-app .hub__top,
+.is-desktop-app .hub__body { margin-left: var(--rail-w); }
+
+.is-desktop-app .hub__body {
+    padding: 18px var(--gutter) var(--gutter);
+    min-height: 0;
+    min-width: 0;
+}
+.is-desktop-app .hub-panel { min-height: 0; height: 100%; }
+.is-desktop-app .hub-panel.active { display: flex; flex-direction: column; min-height: 0; }
+
+/* The phone's scrolling containers become fixed frames. Everything inside
+   them is re-laid below so it fits; section 11 owns the four that may not. */
+.is-desktop-app .hub-scroll { overflow: hidden; min-height: 0; }
+
+/* =========================================
+   4. THE RAIL
+   ========================================= */
+.is-desktop-app .hub__nav {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 2px;
+    padding: 16px 12px 12px;
+    background: var(--surface-1);
+    border-top: none;
+    border-right: 1px solid var(--hairline);
+    padding-bottom: 12px;
+}
+
+.is-desktop-app .rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 2px 10px 18px;
+    font-family: var(--font-display);
+    font-size: 0.82em;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    color: var(--text-hi);
+}
+.is-desktop-app .rail-brand__mark {
+    display: grid;
+    place-items: center;
+    width: 26px; height: 26px;
+    flex: 0 0 26px;
+    border-radius: var(--r-sm);
+    background: linear-gradient(150deg, var(--surface-4), var(--surface-2));
+    border: 1px solid var(--gold-line);
+    color: var(--gold);
+    font-size: 0.8em;
+}
+.is-desktop-app .rail-brand__text em { font-style: normal; color: var(--gold); }
+
+.is-desktop-app .hub-tab {
+    position: relative;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 11px;
+    height: 40px;
+    padding: 0 11px;
+    border-radius: var(--r-md);
+    font-size: 0.8em;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    transition: color 0.14s ease, background 0.14s ease;
+}
+.is-desktop-app .hub-tab i {
+    font-size: 1.05em;
+    width: 18px;
+    flex: 0 0 18px;
+    text-align: center;
+}
+.is-desktop-app .hub-tab:hover { background: var(--surface-2); color: var(--text-hi); }
+.is-desktop-app .hub-tab.active { background: var(--surface-3); color: var(--gold); }
+
+/* The active marker is a rule on the leading edge — the rail equivalent of an
+   underline, and the reason the active item does not need a louder fill. */
+.is-desktop-app .hub-tab::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 2px;
+    height: 0;
+    border-radius: 0 2px 2px 0;
+    background: var(--gold);
+    transform: translateY(-50%);
+    transition: height 0.16s ease;
+}
+.is-desktop-app .hub-tab.active::before { height: 18px; }
+
+/* --- the Play CTA, at the rail's foot --- */
+.is-desktop-app .hub__cta {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px;
+    background: var(--surface-1);
+    border-top: 1px solid var(--hairline);
+    border-right: 1px solid var(--hairline);
+}
+.is-desktop-app .hub__cta .segmented { display: flex; }
+.is-desktop-app .hub__cta .seg { flex: 1 1 0; text-align: center; }
+.is-desktop-app .hub__play { min-height: 42px; font-size: 0.92em; letter-spacing: 0.4px; }
+
+/* The phone hides Play on Charts/Stats/Profile because it covers the legend.
+   There is no such collision here, and a primary action that disappears when
+   you look something up is a worse trade on a screen this size. */
+.is-desktop-app .hub[data-active-tab="charts"] .hub__cta,
+.is-desktop-app .hub[data-active-tab="stats"] .hub__cta,
+.is-desktop-app .hub[data-active-tab="profile"] .hub__cta {
+    display: flex;
+}
+
+/* =========================================
+   5. SCREEN HEADER
+   The wordmark moves into the rail, so the top bar can do what a desktop top
+   bar is for: say which screen you are on.
+   ========================================= */
+.is-desktop-app .hub__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+    height: 52px;
+    padding: 0 var(--gutter);
+    border-bottom: 1px solid var(--hairline);
+    background: var(--surface-1);
+}
+.is-desktop-app .hub__wordmark { display: none; }
+
+.is-desktop-app .hub__top::before {
+    content: '';
+    font-family: var(--font-display);
+    font-size: 0.86em;
+    font-weight: 700;
+    letter-spacing: 2.2px;
+    word-spacing: -0.14em;          /* tracked-out caps scatter without this */
+    text-transform: uppercase;
+    color: var(--text-hi);
+}
+.is-desktop-app .hub__top::after {
+    content: '';
+    font-size: 0.74em;
+    color: var(--text-lo);
+    letter-spacing: 0.2px;
+}
+
+.is-desktop-app .hub[data-active-tab="path"]     .hub__top::before { content: 'The Path'; }
+.is-desktop-app .hub[data-active-tab="practice"] .hub__top::before { content: 'Practice'; }
+.is-desktop-app .hub[data-active-tab="charts"]   .hub__top::before { content: 'Reference'; }
+.is-desktop-app .hub[data-active-tab="stats"]    .hub__top::before { content: 'Statistics'; }
+.is-desktop-app .hub[data-active-tab="profile"]  .hub__top::before { content: 'Profile'; }
+
+.is-desktop-app .hub[data-active-tab="path"]     .hub__top::after { content: 'Five stages, in order. Master one to move on.'; }
+.is-desktop-app .hub[data-active-tab="practice"] .hub__top::after { content: 'Pick a drill on the left, set it up on the right.'; }
+.is-desktop-app .hub[data-active-tab="charts"]   .hub__top::after { content: '6 decks · S17 · DAS · late surrender · 75% penetration'; }
+.is-desktop-app .hub[data-active-tab="stats"]    .hub__top::after { content: 'Everything graded, since the first hand.'; }
+.is-desktop-app .hub[data-active-tab="profile"]  .hub__top::after { content: 'Rank, achievements, and how the app behaves.'; }
+
+/* =========================================
+   6. PATH — a status strip across the top, the ladder filling everything else
+   The first cut put rank and challenge in a 330px left column beside a tall
+   ladder, and the challenge card then had to stretch 550px to fill it: a card
+   holding three short lines with a hand's width of nothing between each. The
+   ladder is the screen; rank and today's challenge are a header for it.
+   ========================================= */
+.is-desktop-app #hub-path-body {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    /* A fixed strip rather than `auto`: it gives the challenge real presence
+       and takes height back off the ladder rows, which had more of it than
+       they had content to put in it. */
+    grid-template-rows: 118px minmax(0, 1fr);
+    gap: 14px 16px;
+}
+.is-desktop-app .path-header {
+    grid-area: 1 / 1;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 4px;
+    margin: 0;
+    padding: 14px 18px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+}
+.is-desktop-app .path-header__rank { font-size: 1.3em; }
+
+/* The challenge goes HORIZONTAL in the strip: what it is on the left, how far
+   along on the right. Placed by class rather than by nth-child so a new line
+   in the card does not silently reshuffle it. */
+.is-desktop-app #hub-path-body > .challenge-card {
+    grid-area: 1 / 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-rows: auto auto auto;
+    align-content: center;
+    column-gap: 24px;
+    row-gap: 2px;
+    margin: 0;
+    padding: 14px 18px;
+}
+.is-desktop-app #hub-path-body > .challenge-card > .challenge-card__head  { grid-area: 1 / 1; }
+.is-desktop-app #hub-path-body > .challenge-card > .challenge-card__title { grid-area: 2 / 1; }
+.is-desktop-app #hub-path-body > .challenge-card > .challenge-card__desc  { grid-area: 3 / 1; margin: 0; }
+.is-desktop-app #hub-path-body > .challenge-card > .challenge-card__track { grid-area: 2 / 2; align-self: center; margin: 0; }
+.is-desktop-app #hub-path-body > .challenge-card > .challenge-card__count { grid-area: 3 / 2; text-align: right; }
+
+/* The ladder takes the full width and the whole remaining height. */
+.is-desktop-app .ladder-list {
+    grid-area: 2 / 1 / 3 / 3;
+    display: grid;
+    /* The stages DIVIDE the space rather than stacking to whatever height they
+       want. Add a sixth stage and every row gets shorter; nothing overflows
+       and nothing needs a scrollbar. */
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 10px;
+    min-height: 0;
+}
+/* At 1000px wide a stage is a ROW, not a card: what it is on the left, how far
+   along on the right. Stacking the meter under the head there gives a progress
+   bar a yard long with its own label orphaned beneath it. */
+.is-desktop-app .ladder-stage {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(300px, 0.85fr) auto;
+    align-items: center;
+    column-gap: 22px;
+    min-height: 0;
+    overflow: hidden;
+    padding: 12px 20px;
+}
+/* display:contents flattens the head's three children into the row's own grid,
+   so the status pill can sit at the far RIGHT of the row instead of at the
+   right edge of the head — where it was stranded mid-row with empty space on
+   both sides. Four zones: what it is, what it says, how far along, where it
+   stands. */
+.is-desktop-app .ladder-stage__head { display: contents; }
+/* EVERY zone names its ROW as well as its column. The meter comes after the
+   pill in the DOM, so with only a column named, auto-placement finds the
+   cursor already past column 3 in row 1 and opens a second row for it — the
+   progress bar then sits half a row below the title it belongs to, which
+   looks like a vertical-centring bug and is not one. */
+.is-desktop-app .ladder-stage__icon   { grid-area: 1 / 1; }
+.is-desktop-app .ladder-stage__titles { grid-area: 1 / 2; }
+.is-desktop-app .ladder-stage .ladder-meter { grid-area: 1 / 3; gap: 7px; }
+.is-desktop-app .ladder-stage__pill   { grid-area: 1 / 4; justify-self: end; }
+/* A 120px row filled by a 30px icon and two small lines reads as a layout
+   that ran out of content. The row is this size because five stages divide
+   the screen, so the CONTENT grows to match rather than floating in it. */
+.is-desktop-app .ladder-stage__icon { width: 44px; height: 44px; flex: 0 0 44px; font-size: 1.15em; }
+.is-desktop-app .ladder-stage__title { font-size: 1.14em; }
+.is-desktop-app .ladder-stage__tagline { font-size: 0.82em; }
+.is-desktop-app .ladder-stage__pill { font-size: 0.64em; padding: 0.35em 0.8em; }
+.is-desktop-app .ladder-stage .ladder-meter__track { height: 9px; }
+.is-desktop-app .ladder-meter__label { font-size: 0.76em; }
+
+/* =========================================
+   7. PRACTICE — modes on the left, their configuration on the right
+   The phone stacks these into one long scroll, which is exactly why the
+   Table Sim settings were four screens below the Table Sim tile.
+   ========================================= */
+.is-desktop-app .practice-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 348px;
+    gap: 20px;
+    padding-bottom: 0;
+    min-height: 0;
+}
+.is-desktop-app .practice-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    min-width: 0;
+}
+/* Tiles are a FIXED height, and the slack is left at the foot of the screen.
+   Letting the two grids absorb it (2fr/1fr against the column) does fill the
+   panel, and gives 190px tiles holding an icon, two short lines and a hand's
+   depth of nothing between them — a bigger target that looks emptier. Both
+   columns now end at roughly the same line, so the remaining space reads as
+   the screen's bottom margin rather than as something that failed to load. */
+.is-desktop-app .practice-col--modes {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.is-desktop-app .practice-col--config { gap: 14px; align-content: start; }
+
+.is-desktop-app .practice-section-title { margin: 4px 0 0; }
+.is-desktop-app .tile-grid--practice,
+.is-desktop-app .tile-grid--short {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: 148px;
+    align-content: start;
+    gap: 10px;
+    min-height: 0;
+    flex: 0 0 auto;
+    overflow: visible;
+}
+.is-desktop-app .tile { min-height: 0; padding: 12px 13px; border-radius: var(--r-lg); }
+.is-desktop-app .tile__glyph { font-size: 1.2em; }
+.is-desktop-app .tile__name,
+.is-desktop-app .tile-grid--short .tile__name { font-size: 0.88em; }
+.is-desktop-app .tile__sub,
+.is-desktop-app .tile-grid--short .tile__sub { font-size: 0.7em; }
+
+.is-desktop-app .config-card {
+    margin: 0;
+    padding: 14px 16px;
+    border-radius: var(--r-lg);
+}
+.is-desktop-app .config-card__note { font-size: 0.72em; }
+
+/* The option row inside the modes column is the drill-style switch; give it
+   the card treatment so it does not float unattached above the tiles. */
+.is-desktop-app .practice-col--modes > .option-row {
+    padding: 9px 14px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+}
+
+/* =========================================
+   8. CHARTS — the tables finally get the room they were designed for
+   ========================================= */
+.is-desktop-app .chart-view { height: 100%; min-height: 0; }
+.is-desktop-app .chart-tabs { flex: 0 0 auto; }
+.is-desktop-app .chart-tab { border-radius: var(--r-sm); font-size: 0.78em; }
+.is-desktop-app .chart-panels { min-height: 0; }
+.is-desktop-app .chart-panel.active { min-height: 0; gap: 12px; }
+
+/* table-layout: fixed plus a definite height is what lets the grid fill the
+   panel instead of sitting at its intrinsic size with a void beneath it. */
+.is-desktop-app .chart-panel .reference-table {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    table-layout: fixed;
+    font-size: 0.86em;
+}
+.is-desktop-app .chart-panel .reference-table th,
+.is-desktop-app .chart-panel .reference-table td { padding: 0; }
+
+/* Two blocks, side by side — on the phone they are a scroll. */
+.is-desktop-app .chart-rules {
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: 28px;
+}
+.is-desktop-app .chart-rules__block li { font-size: 0.86em; }
+
+/* =========================================
+   9. STATS — the four sections as a 2x2 board of real cards
+   Placed by data-section (stats-render.js names them), never by position:
+   an empty-state section still lands where it belongs on a fresh install.
+   ========================================= */
+.is-desktop-app #hub-stats-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 14px;
+    min-height: 0;
+}
+.is-desktop-app #hub-stats-body .stats-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0;
+    padding: 13px 16px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+}
+.is-desktop-app #hub-stats-body .stats-section-title {
+    flex: 0 0 auto;
+    margin: 0 0 10px;
+    font-size: 0.74em;
+    letter-spacing: 1.6px;
+    word-spacing: -0.12em;
+    text-transform: uppercase;
+}
+.is-desktop-app [data-section="accuracy"] { grid-area: 1 / 1; }
+.is-desktop-app [data-section="trend"]    { grid-area: 1 / 2; }
+.is-desktop-app [data-section="heatmap"]  { grid-area: 2 / 1; }
+.is-desktop-app [data-section="mistakes"] { grid-area: 2 / 2; }
+.is-desktop-app .stats-clear-history-btn {
+    grid-area: 3 / 1 / 4 / 3;
+    justify-self: end;
+    margin: 0;
+    width: auto;
+}
+.is-desktop-app .trend-wrap { flex: 1 1 auto; min-height: 0; }
+.is-desktop-app .trend-chart { height: 100%; }
+.is-desktop-app .stats-mistake-row { font-size: 0.74em; }
+
+/* =========================================
+   10. PROFILE — identity and settings on the left, the catalog on the right
+   #hub-profile-body is display:contents so its three blocks become items of
+   this grid directly; the Settings markup beside it is a plain sibling.
+   ========================================= */
+.is-desktop-app .profile-panel {
+    display: grid;
+    grid-template-columns: 372px minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    gap: 12px 20px;
+    padding-bottom: 0;
+    min-height: 0;
+}
+.is-desktop-app #hub-profile-body { display: contents; }
+
+.is-desktop-app .profile-panel .rank-header { grid-column: 1; grid-row: 1; margin: 0; }
+.is-desktop-app .profile-panel [data-section="challenge"] { grid-column: 1; grid-row: 2; margin: 0; }
+.is-desktop-app .profile-panel > .practice-section-title { grid-column: 1; grid-row: 3; margin: 6px 0 0; }
+.is-desktop-app .profile-panel > .settings-panel {
+    grid-column: 1;
+    grid-row: 4;
+    min-height: 0;
+    align-self: start;
+    padding: 4px 16px 10px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+}
+.is-desktop-app .profile-panel .settings-row { padding: 0.55em 0; font-size: 0.84em; }
+
+.is-desktop-app .profile-panel [data-section="achievements"] {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0;
+    padding: 13px 16px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+}
+.is-desktop-app [data-section="achievements"] .stats-section-title { margin: 0 0 2px; }
+.is-desktop-app [data-section="achievements"] .stats-note { flex: 0 0 auto; margin: 0 0 10px; }
+.is-desktop-app [data-section="achievements"] .achv-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* Same argument as the ladder: the catalog divides the card. A fifteenth
+       achievement makes every tile shorter, it does not make a scrollbar. */
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 9px;
+}
+/* Centred, because the row height is now decided by the grid rather than by
+   the card: top-aligned content in a 150px row leaves every tile bottom-heavy
+   with nothing. */
+.is-desktop-app .achv-card { min-height: 0; overflow: hidden; padding: 10px; justify-content: center; }
+.is-desktop-app .achv-card__title { font-size: 0.78em; }
+.is-desktop-app .achv-card__desc { font-size: 0.66em; }
+
+/* One voice for every section heading in the hub. The markup uses two
+   different classes for the same job (.stats-section-title from the
+   renderers, .practice-section-title from index.html) and on a screen showing
+   both at once the difference reads as a mistake rather than a distinction. */
+.is-desktop-app .hub .stats-section-title,
+.is-desktop-app .hub .practice-section-title {
+    font-size: 0.74em;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    word-spacing: -0.12em;
+    text-transform: uppercase;
+    color: var(--gold-strong);
+}
+
+/* =========================================
+   11. DESIGNATED SCROLL WELLS
+   The four places whose content is genuinely unbounded. Each is a bounded
+   card, fully visible, that scrolls INSIDE itself with no visible scrollbar.
+   Nothing else in the app may scroll.
+
+   THIS LIST IS DUPLICATED IN desktop/scripts/smoke.js AND THE TWO MUST
+   MATCH. The test walks every screen, and an element that overflows without
+   being on this list fails the run — so adding a scroller means adding it
+   here and there, deliberately, rather than discovering it on a user's
+   screen as a panel that mysteriously cuts off.
+   ========================================= */
+.is-desktop-app .stats-mistake-list,
+.is-desktop-app .heatmap-wrap,
+.is-desktop-app [data-section="accuracy"] .bar-chart,
+.is-desktop-app #reference-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+}
+.is-desktop-app .stats-mistake-list::-webkit-scrollbar,
+.is-desktop-app .heatmap-wrap::-webkit-scrollbar,
+.is-desktop-app [data-section="accuracy"] .bar-chart::-webkit-scrollbar,
+.is-desktop-app #reference-modal-body::-webkit-scrollbar { width: 0; height: 0; }
+
+/* =========================================
+   12. THE TABLE
+   The phone reserves 340px of every desktop window for a companion rail
+   holding two "Coming soon" cards. Table Sim shipped and the certification
+   shipped, so that rail is now a promise the app has already kept elsewhere;
+   it is hidden here and the table takes the whole window back. The space is
+   spoken for by multi-spot play, and it can be built when it exists.
+   ========================================= */
+.is-desktop-app #desktop-rail { display: none; }
+.is-desktop-app #blackjack-container { right: 0; }
+.is-desktop-app #main-menu { width: 100%; }
+
+.is-desktop-app #blackjack-container,
+.is-desktop-app #count-drill-container {
+    background:
+        radial-gradient(110% 76% at 50% 30%, var(--felt-glow) 0%, rgba(9, 22, 19, 0.28) 44%, rgba(7, 9, 11, 0) 74%),
+        var(--bg-base);
+}
+
+.is-desktop-app .zone { max-width: 780px; }
+
+/* A HAND MUST NEVER BE SHRUNK. #player-cards is a flex child, so with the
+   default `min-height: auto` overridden anywhere up the chain it will happily
+   compress to less than a card is tall and let the cards render outside it —
+   which puts the bottom of the hand you are being graded on underneath the
+   Hit button. Pinning the row to the card height makes the felt give way
+   instead, and smoke.js measures the CARDS (not their container) against the
+   action bar so this cannot come back quietly. */
+.is-desktop-app #player-cards,
+.is-desktop-app #dealer-cards {
+    flex: 0 0 auto;
+    min-height: var(--card-h);
+}
+
+/* .hand-cards is `height: var(--card-h)` in the shared stylesheet, but a
+   .hand-column is a card row PLUS its score badge, so the column is always
+   about 28px taller than the box holding it. On the phone that excess rides
+   up over the felt and nobody notices. Here the felt is short and the excess
+   goes the other way — straight under the action bar, taking the bottom edge
+   of the hand with it. The row sizes to what is in it, and the columns
+   bottom-align so the badge grows upward into empty felt. */
+.is-desktop-app .hand-cards {
+    height: auto;
+    min-height: var(--card-h);
+    align-items: flex-end;
+}
+.is-desktop-app .topbar {
+    max-width: none;
+    align-items: center;
+    height: 50px;
+    padding: 0 var(--gutter);
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--hairline);
+}
+.is-desktop-app .topbar__group--left { flex-direction: row; align-items: center; }
+.is-desktop-app .dashboard {
+    max-width: 780px;
+    padding: 12px 18px 14px;
+    border-left: 1px solid var(--hairline);
+    border-right: 1px solid var(--hairline);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+/* The hands were pinned to the extreme top and bottom of an 800px window with
+   a third of the felt empty between them. Padding pulls them toward the middle
+   third, where a real table's action actually sits. */
+.is-desktop-app .zone--dealer { padding-top: 40px; }
+.is-desktop-app .zone--player { padding-bottom: 18px; }
+
+/* The discard tray rides just outside the table, not in the far corner of the
+   window — at 1280px wide it was 440px from anything it relates to, which is
+   exactly the distance at which you stop eyeballing it. */
+.is-desktop-app .discard-tray-wrap { right: max(0.8em, calc(50% - 432px)); }
+
+.is-desktop-app .felt-text h2 { font-family: var(--font-display); letter-spacing: 3px; font-size: 1.15em; }
+.is-desktop-app .felt-text p { letter-spacing: 1px; }
+
+/* =========================================
+   13. COUNT DRILLS, OVERLAYS, TOASTS
+   ========================================= */
+.is-desktop-app .cd-stage,
+.is-desktop-app .cd-panel { max-width: 780px; margin-left: auto; margin-right: auto; width: 100%; }
+
+/* Modals and overlays centre on the window now that nothing is reserved. */
+.is-desktop-app .modal-sheet { max-width: 1040px; width: 80%; top: 5%; height: 88%; }
+.is-desktop-app #settings-menu { border-radius: var(--r-lg); }
+
+/* Toasts move to the top-right, under the screen header. Bottom-right is the
+   other convention and it is wrong here: that corner holds Stats' Clear
+   History button, so an unlocked achievement would land on top of the one
+   destructive control in the app. */
+.is-desktop-app .achv-layer {
+    top: 64px;
+    bottom: auto;
+    right: 18px;
+    left: auto;
+    transform: none;
+    align-items: flex-end;
+    width: min(30vw, 22em);
+}
+/* It lands on top of whatever is in that corner for a few seconds, so it has
+   to look like it is floating rather than like a card that appeared inside
+   the panel. */
+.is-desktop-app .achv-toast {
+    box-shadow: var(--elev-3);
+    border-color: var(--gold-line);
+}

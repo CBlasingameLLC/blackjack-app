@@ -33,6 +33,21 @@ const RENDERER_DIR = app.isPackaged
     ? path.join(process.resourcesPath, 'renderer')
     : path.resolve(__dirname, '../../../dist');
 
+// A packaged build takes its icon from the executable's own resources, but a
+// dev run has no executable of ours - so without this, `npm start` shows the
+// Electron logo in the taskbar, which is where this app is looked at most
+// during development.
+const WINDOW_ICON = path.resolve(__dirname, '../../build/icon.ico');
+
+// THE NO-SCROLL CONTRACT IS ABOUT THE CONTENT BOX, AND minWidth/minHeight ARE
+// NOT. Electron measures both minimums as WINDOW size, frame included, so a
+// minHeight of 800 on Windows leaves the page about 769px - and the desktop
+// layout is built to fit 1280x800 of actual pixels. Asking for the window
+// minimum and getting a smaller content minimum is how a guarantee quietly
+// becomes an aspiration, so the frame is measured once at creation and the
+// floor raised by exactly that much.
+const MIN_CONTENT = { width: 1280, height: 800 };
+
 protocol.registerSchemesAsPrivileged([{
     scheme: 'app',
     privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: false }
@@ -57,11 +72,10 @@ function registerAppProtocol() {
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1280,
-        height: 860,
-        minWidth: 1024,
-        minHeight: 720,
-        backgroundColor: '#101013',
+        width: 1440,
+        height: 900,
+        icon: WINDOW_ICON,
+        backgroundColor: '#080b0d',
         show: false,
         autoHideMenuBar: true,
         webPreferences: {
@@ -71,6 +85,15 @@ function createWindow() {
             nodeIntegration: false
         }
     });
+
+    // Window size minus content size is the frame; adding it back makes the
+    // minimum a genuine 1280x800 of page.
+    const [winW, winH] = mainWindow.getSize();
+    const [contentW, contentH] = mainWindow.getContentSize();
+    mainWindow.setMinimumSize(
+        MIN_CONTENT.width + (winW - contentW),
+        MIN_CONTENT.height + (winH - contentH)
+    );
 
     mainWindow.once('ready-to-show', () => mainWindow.show());
     mainWindow.loadURL('app://bundle/index.html');
@@ -131,4 +154,4 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
 });
 
-export { RENDERER_DIR, files };
+export { RENDERER_DIR, files, MIN_CONTENT, WINDOW_ICON };

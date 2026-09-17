@@ -6,6 +6,12 @@ directories:
   output: release
   buildResources: build
 
+# Named rather than left to the buildResources convention: an icon nobody
+# points at and an icon that is missing produce the identical blank taskbar,
+# and only one of them is visible in a diff. verify-icon.js asserts both lines
+# are here for that reason.
+icon: build/icon.ico
+
 # The engine is NOT vendored into desktop/. `npm run dist` builds the shared
 # renderer at the repo root first, and it is carried in as a resource - so the
 # packaged app runs byte-identical files to the web and mobile builds.
@@ -30,6 +36,9 @@ win:
   artifactName: BlackjackPro-Setup-${version}.${ext}
 
 nsis:
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true

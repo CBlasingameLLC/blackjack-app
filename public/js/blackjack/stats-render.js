@@ -59,8 +59,18 @@
         return Math.round((correct / total) * 100);
     }
 
-    function section(title) {
+    /**
+     * `name` is a STABLE ADDRESS for the section, independent of its title
+     * and of its position in the list. The desktop stylesheet lays these four
+     * out as a 2x2 grid and has to be able to say which is which; matching on
+     * nth-child would silently reshuffle the moment a fifth section is added,
+     * and matching on the content inside (`:has(.heatmap-wrap)`) breaks on
+     * exactly the runs where that section is EMPTY — a fresh install, which
+     * is the one layout nobody checks by hand.
+     */
+    function section(title, name) {
         var s = el('div', 'stats-section');
+        if (name) s.dataset.section = name;
         s.appendChild(el('h3', 'stats-section-title', title));
         return s;
     }
@@ -70,7 +80,7 @@
     // ------------------------------------------------------------------
 
     function buildAccuracySection(lifetime) {
-        var s = section('Lifetime Accuracy');
+        var s = section('Lifetime Accuracy', 'accuracy');
 
         var overall = pct(lifetime.decisionsCorrect, lifetime.decisionsTotal);
         var head = el('div', 'stats-headline');
@@ -122,7 +132,7 @@
     // ------------------------------------------------------------------
 
     function buildTrendSection(history) {
-        var s = section('Accuracy Over Time');
+        var s = section('Accuracy Over Time', 'trend');
 
         if (history.length < TREND_WINDOW) {
             s.appendChild(el('div', 'stats-empty',
@@ -200,7 +210,7 @@
     }
 
     function buildHeatmapSection(mistakeLog) {
-        var s = section('Weak Spots');
+        var s = section('Weak Spots', 'heatmap');
 
         // Only hand mistakes can be placed on a hand x dealer grid — count
         // checks and estimation misses have no hand/upcard.
@@ -281,7 +291,7 @@
     }
 
     function buildMistakeLogSection(mistakeLog) {
-        var s = section('Mistake Log');
+        var s = section('Mistake Log', 'mistakes');
         var list = el('div', 'stats-mistake-list');
 
         if (!mistakeLog.length) {

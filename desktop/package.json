@@ -11,8 +11,10 @@
     "verify:data": "node scripts/verify-data.js",
     "mcp": "node mcp/server.js",
     "verify:smoke": "electron scripts/smoke.js",
-    "verify": "npm run verify:data && npm run verify:mcp && npm run verify:smoke",
-    "verify:mcp": "node scripts/verify-mcp.js"
+    "verify": "npm run verify:data && npm run verify:mcp && npm run verify:icon && npm run verify:smoke",
+    "verify:mcp": "node scripts/verify-mcp.js",
+    "verify:icon": "node scripts/verify-icon.js",
+    "icon": "electron scripts/make-icon.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.22.0",

@@ -68,6 +68,9 @@
         var d = Gam.describeChallenge(challenge);
 
         var section = el('div', 'stats-section');
+        // Same reason as stats-render's sections: the desktop grid places
+        // these by name, so neither a retitle nor a reorder can move them.
+        section.dataset.section = 'challenge';
         section.appendChild(el('h3', 'stats-section-title', "Today's Challenge"));
 
         var card = el('div', 'challenge-card' + (d.completed ? ' challenge-card--done' : ''));
@@ -95,6 +98,7 @@
         unlockedList.forEach(function (a) { unlockedMap[a.id] = a; });
 
         var section = el('div', 'stats-section');
+        section.dataset.section = 'achievements';
         var title = el('h3', 'stats-section-title', 'Achievements');
         section.appendChild(title);
         section.appendChild(el('p', 'stats-note', unlockedList.length + ' / ' + BJ.Gamification.ACHIEVEMENTS.length + ' unlocked'));

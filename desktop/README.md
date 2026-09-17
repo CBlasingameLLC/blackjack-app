@@ -35,7 +35,48 @@ Individually:
 |---|---|
 | `npm run verify:data` | the data folder round-trips, and a *real* failed rename keeps its temp file and recovers next launch |
 | `npm run verify:mcp` | the MCP server answers real JSON-RPC over stdio, exposes six read tools and **no writer** |
-| `npm run verify:smoke` | a real Electron boot: `app://` serves the shared engine, localStorage works, the mirror reaches disk |
+| `npm run verify:smoke` | a real Electron boot: `app://` serves the shared engine, localStorage works, the mirror reaches disk, **and no screen scrolls at 1280x800** |
+| `npm run verify:icon` | `build/icon.ico` is a structurally valid ICO whose every entry lands on a real PNG, and is actually referenced |
+| `npm run icon` | regenerates `build/icon.ico` + `icon.png` from the SVG mark in `scripts/make-icon.js` |
+| `npm run shoot` | boots on a seeded profile and screenshots every screen at 1280x800 — for looking, not asserting |
+
+## The desktop skin
+
+**`public/css/desktop.css` is loaded only inside Electron and it is the only
+place this build looks different.** There is no second copy of the markup and
+no second renderer: an inline script in `index.html` sets
+`html.is-desktop-app` and appends the stylesheet when `window.bjDesktop`
+exists, and every rule in that file is gated on the class as well, so the two
+can never disagree about which layout is in force. The web and mobile builds
+download none of it.
+
+**The identity is a token swap.** The phone's `--gold` is remapped to an ice
+cyan and gold is kept under `--money`, used only for the bankroll, the bet,
+the chips and a push. On a phone one accent doing "important" and "cash" is
+fine; on a screen showing a ladder, a heatmap and a bankroll at once it is a
+colour that means neither.
+
+**The bottom bar is a left rail**, pinned with absolute positioning rather
+than a grid — `hub.js` shows and hides the hub with an inline
+`style.display`, and an inline style beats every stylesheet. `display: grid
+!important` would win that fight and also win the wrong one, beating the
+`display: none` that hides the hub when a game starts.
+
+**Nothing scrolls, and that is asserted rather than hoped.** The floor is
+1280x800 of *content*: `minWidth`/`minHeight` are window sizes, so `main.js`
+measures the frame at creation and raises the minimum by exactly that much.
+`verify:smoke` then walks every screen at that size with two independent
+probes — one comparing `scrollHeight` to `clientHeight`, one comparing every
+element's bounding box against its panel's — because the first has a real
+blind spot: a `<table>` whose rows exceed its box does not report it. **Both
+probes are made to fail on purpose first**, against a planted oversized
+element, so a green run means the detector still works.
+
+The four places that *may* scroll are listed in §11 of `desktop.css` and
+duplicated in `smoke.js`; the two lists must match. Each is a bounded card,
+fully on screen, whose content is genuinely unbounded — a mistake log has no
+maximum length. Adding a fifth is a deliberate act in two files, not something
+that happens to a layout.
 
 ## The data folder
 
@@ -87,7 +128,15 @@ Tools: `get_player`, `get_stats`, `get_trends`, `get_mistakes`,
   so the sound setting is a switch wired to nothing. Pre-existing, not
   introduced here. Either ship the files or synthesise the cues with the Web
   Audio API (no assets, works offline).
-- **Font Awesome loads from a CDN**, so icons are missing with no internet —
-  which for an offline desktop trainer is the wrong default. Self-host a subset.
+- ~~Font Awesome loads from a CDN~~ — **fixed.** The solid webfont and its
+  stylesheet are served from the bundle, so the app now makes **zero** network
+  requests and `verify:smoke` asserts that. It had to be fixed here: the rail's
+  five destinations are icon-led, and on a plane they would have been blank.
 - **The installer is unsigned**, so first run shows a SmartScreen "unknown
   publisher" prompt once. Signing is a certificate purchase, not a config change.
+- **The bankroll renders unrounded** — a 3:2 payout on $25 shows as
+  `$10,062.5`. Pre-existing and in the shared money formatting, not the skin.
+- **The felt is sparse at 1280x800.** One hand on a table built for a full
+  window is the honest look of a single-spot game; multi-spot play is the next
+  milestone and is what that space is reserved for. The 340px "coming soon"
+  companion rail is hidden on desktop until then.
