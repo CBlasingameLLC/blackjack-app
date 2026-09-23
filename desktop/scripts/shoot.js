@@ -76,7 +76,7 @@ app.whenReady().then(async () => {
         console.log('  ' + file);
     };
 
-    for (const tab of ['path', 'practice', 'charts', 'stats', 'profile']) {
+    for (const tab of ['path', 'practice', 'charts', 'edge', 'stats', 'profile']) {
         await win.webContents.executeJavaScript(`window.BJ.Hub.showHub('${tab}')`);
         await wait(450);
         await shoot(tab);

@@ -25,6 +25,11 @@
     // One entry per graded decision — the source for the accuracy-over-time
     // trend. Same ring-buffer discipline as the other two.
     const ACCURACY_HISTORY_CAP = 200;
+    // One full rust window per mode (mastery.js reads RUST_WINDOW = 100 of
+    // these). Sized to the window rather than above it: a longer buffer would
+    // only dilute "current form" with results the player has already moved
+    // past, which is the opposite of what the flag is for.
+    const ROLLING_FORM_CAP = 100;
 
     function hasLocalStorage() {
         return typeof localStorage !== 'undefined' && localStorage !== null;
@@ -59,6 +64,12 @@
             // cards at this size/rate).
             speedCountSize: 52,       // cards per run
             speedCountRate: 2,        // cards per second
+            // Kept separate from speedCountSize on purpose: the manual
+            // countdown is benchmarked in seconds-per-deck, so 52 is its
+            // meaningful default, and sharing one setting would silently
+            // move the timed drill's goalposts whenever the flash drill was
+            // retuned for a different reason.
+            manualCountSize: 52,      // cards per manual countdown run
 
             // Table Simulation (counting practice against an auto-played
             // table). `tableSimSpots` is the difficulty dial - more boxes is
@@ -76,7 +87,15 @@
     // Focus" achievements. Both live from `_recordDecision`, the same choke
     // point every other stat already flows through.
     function defaultProgression() {
-        return { xp: 0, currentStreak: 0, bestStreak: 0 };
+        return {
+            xp: 0, currentStreak: 0, bestStreak: 0,
+            // Showing-up counters. `daysPracticed` is distinct days ever;
+            // `dayStreak` is the current consecutive run and resets on a gap.
+            // Defaults are merged over stored progression by getProgression,
+            // so a save written before these existed reads as a clean zero
+            // rather than NaN-ing every comparison that touches them.
+            daysPracticed: 0, dayStreak: 0, bestDayStreak: 0, lastPracticeDay: null
+        };
     }
 
     // Every mode that can record graded decisions. `_recordDecision` also
@@ -110,6 +129,7 @@
         MISTAKE_LOG_CAP,
         HAND_HISTORY_CAP,
         ACCURACY_HISTORY_CAP,
+        ROLLING_FORM_CAP,
 
         /**
          * The canonical empty stats shape. Exposed so callers that need to
@@ -214,6 +234,37 @@
             while (log.length > ACCURACY_HISTORY_CAP) log.shift();
             this.set('accuracy_history', log);
             return log;
+        },
+
+        /**
+         * CURRENT FORM, per mode: `{ <mode>: '110111...' }`, newest last, each
+         * capped at ROLLING_FORM_CAP.
+         *
+         * This is deliberately NOT derived from `accuracy_history`. That log
+         * is one shared 200-entry ring across every mode, so a session spent
+         * on hard totals evicts every soft-total result in it — the per-mode
+         * window it could offer is whatever is left over, which is a different
+         * (and much shorter) window for each mode depending on what you
+         * happened to drill last. Rust detection needs a fixed, comparable
+         * window per section, so each mode gets its own buffer.
+         *
+         * Stored as a string of '1'/'0' rather than an array of booleans
+         * because it is rewritten on every single graded decision: one char
+         * per result keeps a full window at ~100 bytes per mode, where a JSON
+         * boolean array is 40x that and is parsed and re-serialised just as
+         * often.
+         */
+        getRollingForm() {
+            const raw = this.get('rolling_form', {});
+            return (raw && typeof raw === 'object') ? raw : {};
+        },
+        pushRollingResult(mode, correct) {
+            if (!mode) return null;
+            const form = this.getRollingForm();
+            const prev = typeof form[mode] === 'string' ? form[mode] : '';
+            form[mode] = (prev + (correct ? '1' : '0')).slice(-ROLLING_FORM_CAP);
+            this.set('rolling_form', form);
+            return form;
         },
 
         // --- Phase 4c: gamification (progression / achievements / challenge) ---

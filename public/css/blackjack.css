@@ -1099,6 +1099,49 @@ body {
 .reference-table-surrender td:first-child { width: 40%; text-align: left; padding-left: 0.4em; }
 
 /* legend */
+/* --- the three basic-strategy charts on one screen -------------------
+   On a phone they STACK and the panel scrolls: ten dealer columns three
+   abreast at 375px is not a chart, it is a smear. desktop.css turns this
+   into three real columns, which is the whole point of the consolidation
+   and the layout every printed strategy card already uses. */
+.chart-triptych { display: flex; flex-direction: column; gap: 1em; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+.chart-triptych__col { display: flex; flex-direction: column; gap: 0.35em; min-height: 0; min-width: 0; }
+/* THE TABLES SIZE TO THEIR CONTENT HERE, and this rule is load-bearing on the
+   phone. `.reference-table` is `flex: 1 1 auto; height: 100%` so that a single
+   chart distributes its rows into whatever panel it is given — correct while
+   each chart had a panel to itself, and actively destructive with three of
+   them stacked in one flex column: all three ask for the full height, flex
+   shares it out, and every table collapses to about 133px. That is 12px a row,
+   which is not a chart that is a little tight, it is a chart nobody can read.
+   Content height plus a scrolling triptych is the right answer at 375px;
+   desktop.css puts them side by side where each one has a column of its own
+   and the height-distributing behaviour is restored. */
+.chart-triptych .reference-table,
+.chart-advanced .reference-table { flex: 0 0 auto; height: auto; }
+.chart-triptych__col { flex: 0 0 auto; }
+/* And the rows need a REAL height once they stop being stretched. `td` carries
+   `padding: 0` and a ~9px clamped font at 375px, so its intrinsic height is
+   12px — turning off the stretch alone swapped three squashed charts for three
+   charts at their natural size, which is the same 12px row and no better. The
+   stretch was doing the sizing all along. 30px is a row you can read and hit;
+   ten of them per chart is 300px, and the triptych scrolls. */
+.chart-triptych .reference-table th,
+.chart-triptych .reference-table td,
+.chart-advanced .reference-table th,
+.chart-advanced .reference-table td { height: 30px; }
+.chart-triptych .reference-table { font-size: clamp(9px, 2.9vw, 13px); }
+.chart-triptych__title {
+    margin: 0;
+    font-size: 0.72em;
+    font-weight: 700;
+    color: var(--gold-strong);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    word-spacing: -0.12em;
+}
+.chart-advanced { display: flex; flex-direction: column; gap: 1em; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+.chart-advanced__col { display: flex; flex-direction: column; gap: 0.35em; min-height: 0; min-width: 0; }
+
 .chart-legend {
     flex: 0 0 auto;
     display: flex;
@@ -1544,9 +1587,67 @@ body {
 }
 .ladder-meter__fill { height: 100%; border-radius: var(--r-pill); transition: width 0.4s ease; }
 .ladder-meter__fill--mastered { background: var(--win); }
+.ladder-meter__fill--rusty { background: var(--loss); }
+.ladder-meter__fill--ready { background: var(--gold-strong, var(--gold)); }
 .ladder-meter__fill--in-progress { background: var(--gold); }
 .ladder-meter__fill--not-started { background: var(--hairline); }
 .ladder-meter__label { font-size: 0.66em; color: var(--text-lo); font-family: var(--font-mono); }
+
+/* --- tiers, checkouts and rust (the per-section ladder) ---------------
+   A section is one of nine now rather than one of five, grouped into three
+   tiers. On a phone the tiers stack; desktop.css turns them into columns. */
+.ladder-tiers { display: flex; flex-direction: column; gap: 1em; }
+.ladder-tier { display: flex; flex-direction: column; gap: 0.5em; min-width: 0; }
+.ladder-tier__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5em; }
+.ladder-tier__title {
+    font-family: var(--font-display);
+    font-size: 0.8em;
+    font-weight: 700;
+    color: var(--gold);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    /* Tracked-out uppercase spaces the word gaps as well as the letter gaps,
+       so a two-word tier title reads as scattered fragments without this. */
+    word-spacing: -0.14em;
+}
+.ladder-tier__count { font-family: var(--font-mono); font-size: 0.68em; color: var(--text-lo); }
+.ladder-tier__blurb { margin: 0; font-size: 0.72em; color: var(--text-mid); line-height: 1.4; }
+.ladder-tier__list { display: flex; flex-direction: column; gap: 0.6em; min-height: 0; }
+/* A locked tier is dimmed but never hidden and never unclickable: the
+   practice buttons inside still work. Only the CHECKOUT is gated, and hiding
+   the tier would make that impossible to discover. */
+.ladder-tier--locked .ladder-tier__title { color: var(--text-lo); }
+
+.ladder-stage--rusty { border-color: rgba(229, 84, 90, 0.35); }
+.ladder-stage--ready { border-color: var(--gold-line); box-shadow: 0 0 0 1px var(--gold-line); }
+.ladder-stage--blocked { opacity: 0.72; }
+
+.ladder-stage__pill--rusty { color: var(--loss); border-color: rgba(229, 84, 90, 0.4); }
+.ladder-stage__pill--ready { color: var(--gold); border-color: var(--gold-line); }
+.ladder-stage__pill--not-started { color: var(--text-lo); }
+
+.ladder-stage__reason { margin: 0; font-size: 0.7em; color: var(--text-mid); line-height: 1.4; }
+.ladder-stage__actions { display: flex; align-items: center; gap: 0.5em; flex-wrap: wrap; }
+.ladder-stage__btn { font-size: 0.74em; padding: 0.45em 1em; }
+.ladder-stage__checkout-note { font-family: var(--font-mono); font-size: 0.7em; color: var(--gold); }
+
+/* The live-checkout banner replaces the daily challenge in the header strip
+   while an attempt is open — an exam in flight outranks a daily. */
+.checkout-live {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    padding: 0.9em 1em;
+    background: var(--surface-1);
+    border: 1px solid var(--gold-line);
+    border-radius: var(--r-lg);
+}
+.checkout-live--passed { border-color: rgba(70, 201, 138, 0.45); }
+.checkout-live--failed { border-color: rgba(229, 84, 90, 0.45); }
+.checkout-live__title { font-size: 0.95em; font-weight: 700; color: var(--text-hi); }
+.checkout-live__body { margin: 0; font-size: 0.76em; color: var(--text-mid); line-height: 1.45; }
+.checkout-live__actions { display: flex; gap: 0.5em; flex-wrap: wrap; }
+.checkout-live__actions .button { font-size: 0.74em; padding: 0.45em 1em; }
 
 /* =========================================
    DAILY CHALLENGE CARD — shared shape used on both Path (compact) and
@@ -1986,13 +2087,34 @@ body {
 }
 /* Flash cards skip the deal-in transition entirely: at 3–5 cards/sec a
    350ms fade would smear into the next card, and .dealt is normally added
-   on the next animation frame (which never arrives if rAF is throttled). */
+   on the next animation frame (which never arrives if rAF is throttled).
+
+   They get a keyframe TICK instead, and the distinction is load-bearing. A
+   transition needs a "before" state to animate away from; a card replacing an
+   IDENTICAL card has none — same rank, same suit, same pixels — so two 7♦ in
+   a row produced no visual event at all and read as a single card. A six-deck
+   shoe holds six copies of every card, so that is routine, and it costs the
+   player a point of count with nothing on screen to blame it on. A keyframe
+   animation on a freshly built element always replays, whatever the card is.
+
+   110ms is chosen against the fastest feed: the rate cap is 5 cards/sec, and
+   flashNext floors the interval at 120ms, so the tick always finishes before
+   the next card lands and never smears. */
+@keyframes cd-tick {
+    0%   { transform: scale(0.86); opacity: 0.45; }
+    100% { transform: scale(1);    opacity: 1; }
+}
 .playing-card.cd-flash {
     transition: none;
     transition-delay: 0s;
     opacity: 1;
     transform: none;
+    animation: cd-tick 110ms ease-out;
 }
+/* The manual countdown reports accuracy, pace and streak as three separate
+   facts, built as one string with newlines — without this they run together
+   into a paragraph and the three verdicts stop being separable at a glance. */
+.cd-blurb--lines { white-space: pre-line; }
 .cd-progress {
     font-family: var(--font-mono);
     font-size: 0.8em;
@@ -2144,3 +2266,177 @@ body {
 @media (min-width: 900px) {
     #desktop-rail { display: flex; }
 }
+
+/* ==========================================================================
+   THE EDGE TAB — bankroll ledger + EV calculator
+   Base/phone layout: everything stacks and the body scrolls. desktop.css
+   turns it into a fixed two-column board that does not.
+   ========================================================================== */
+.edge-view { min-height: 0; }
+.edge-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.8em; overflow-y: auto; }
+
+.edge-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6em; }
+.edge-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+    padding: 0.7em 0.9em;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    min-width: 0;
+}
+.edge-stat__label {
+    font-size: 0.62em;
+    color: var(--text-lo);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    word-spacing: -0.12em;
+}
+.edge-stat__value { font-family: var(--font-mono); font-size: 1.3em; font-weight: 700; color: var(--text-hi); }
+.edge-stat__sub { font-size: 0.64em; color: var(--text-lo); }
+.edge-stat--good .edge-stat__value { color: var(--win); }
+.edge-stat--bad  .edge-stat__value { color: var(--loss); }
+
+.edge-cols { display: flex; flex-direction: column; gap: 0.8em; min-height: 0; }
+.edge-col { display: flex; flex-direction: column; gap: 0.8em; min-width: 0; min-height: 0; }
+.edge-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    padding: 0.8em 1em;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    min-width: 0;
+    min-height: 0;
+}
+.edge-panel__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6em; }
+.edge-panel__title {
+    margin: 0;
+    font-size: 0.72em;
+    font-weight: 700;
+    color: var(--gold-strong);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    word-spacing: -0.12em;
+}
+.edge-panel__note { margin: 0; font-size: 0.66em; color: var(--text-lo); line-height: 1.45; }
+.edge-panel__warn { margin: 0; font-size: 0.68em; color: var(--loss); line-height: 1.45; }
+
+.edge-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6em; min-width: 0; }
+.edge-row__label { font-size: 0.76em; color: var(--text-mid); }
+.edge-row__readout { font-family: var(--font-mono); font-size: 0.8em; color: var(--gold); }
+.edge-row__input {
+    width: 7.5em;
+    padding: 0.35em 0.5em;
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    text-align: right;
+    color: var(--text-hi);
+    background: var(--surface-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+}
+.edge-row__seg .seg { font-size: 0.68em; padding: 0.3em 0.6em; }
+
+/* --- the bet ramp --- */
+.edge-ramp { width: 100%; border-collapse: collapse; font-size: 0.78em; }
+.edge-ramp th {
+    padding: 0.3em 0.4em;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--text-lo);
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    word-spacing: -0.1em;
+    border-bottom: 1px solid var(--hairline);
+}
+.edge-ramp td { padding: 0.25em 0.4em; border-bottom: 1px solid var(--hairline-soft); vertical-align: middle; }
+.edge-ramp__tc { font-family: var(--font-mono); font-weight: 700; color: var(--text-mid); }
+.edge-ramp__tc--hot { color: var(--win); }
+.edge-ramp__input {
+    width: 4em;
+    padding: 0.2em 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.95em;
+    text-align: right;
+    color: var(--text-hi);
+    background: var(--surface-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+}
+.edge-ramp__money { margin-left: 0.5em; font-family: var(--font-mono); font-size: 0.85em; color: var(--money, var(--gold)); }
+.edge-ramp__seg .seg { font-size: 0.72em; padding: 0.2em 0.5em; }
+.edge-ramp__freq { font-family: var(--font-mono); color: var(--text-lo); text-align: right; }
+
+.edge-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5em; }
+.edge-summary__cell { display: flex; flex-direction: column; gap: 0.1em; min-width: 0; }
+.edge-summary__label { font-size: 0.62em; color: var(--text-lo); }
+.edge-summary__value { font-family: var(--font-mono); font-size: 0.92em; font-weight: 700; color: var(--text-hi); }
+
+/* --- the profit curve --- */
+.edge-chart { width: 100%; height: 100%; min-height: 150px; display: block; }
+.edge-chart__zero { stroke: var(--hairline); stroke-width: 1; stroke-dasharray: 3 4; }
+.edge-chart__profit { stroke: var(--gold); stroke-width: 2; }
+.edge-chart__ev { stroke: var(--money, #e3c16f); stroke-width: 2; stroke-dasharray: 5 4; }
+.edge-chart__tick { fill: rgba(238, 243, 245, 0.34); font-size: 10px; font-family: monospace; }
+.edge-chart__key { display: flex; gap: 0.8em; }
+.edge-chart__keyitem { display: inline-flex; align-items: center; gap: 0.3em; font-size: 0.64em; color: var(--text-lo); }
+.edge-chart__keyitem::before { content: ''; width: 14px; height: 2px; border-radius: 1px; }
+.edge-chart__keyitem--profit::before { background: var(--gold); }
+.edge-chart__keyitem--ev::before { background: var(--money, #e3c16f); }
+
+.edge-empty { margin: 0; font-size: 0.74em; color: var(--text-lo); line-height: 1.5; }
+
+/* --- sessions --- */
+.edge-bank-top, .edge-bank-bottom { display: flex; flex-direction: column; gap: 0.8em; min-height: 0; }
+.edge-sessions { display: flex; flex-direction: column; gap: 0.35em; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.edge-sessions::-webkit-scrollbar { width: 0; height: 0; }
+.edge-session {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.45em 0.6em;
+    background: var(--surface-2);
+    border-radius: var(--r-sm);
+    min-width: 0;
+}
+.edge-session__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.1em; }
+.edge-session__venue { font-size: 0.82em; font-weight: 700; color: var(--text-hi); max-width: 100%; }
+.edge-session__meta { font-size: 0.66em; color: var(--text-lo); font-family: var(--font-mono); max-width: 100%; }
+.edge-session__right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.1em; flex: 0 0 auto; }
+.edge-session__profit { font-family: var(--font-mono); font-size: 0.86em; font-weight: 700; }
+.edge-session__profit.is-up { color: var(--win); }
+.edge-session__profit.is-down { color: var(--loss); }
+.edge-session__ev { font-family: var(--font-mono); font-size: 0.62em; color: var(--text-lo); }
+.edge-session__del {
+    flex: 0 0 auto;
+    width: 1.5em;
+    height: 1.5em;
+    line-height: 1;
+    color: var(--text-lo);
+    background: none;
+    border: none;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+}
+.edge-session__del:hover { color: var(--loss); background: var(--surface-3); }
+
+/* --- the log form --- */
+.edge-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5em; align-items: end; }
+.edge-form__field { display: flex; flex-direction: column; gap: 0.15em; min-width: 0; }
+.edge-form__label { font-size: 0.62em; color: var(--text-lo); text-transform: uppercase; letter-spacing: 0.1em; word-spacing: -0.1em; }
+.edge-form__input {
+    width: 100%;
+    padding: 0.35em 0.5em;
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    color: var(--text-hi);
+    background: var(--surface-3);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-sm);
+}
+.edge-form__btn { font-size: 0.74em; padding: 0.45em 0.8em; }
+.edge-form__error { grid-column: 1 / -1; margin: 0; font-size: 0.7em; color: var(--loss); min-height: 1em; }

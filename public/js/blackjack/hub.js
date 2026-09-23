@@ -81,6 +81,14 @@
                 BJ.StatsRender.render(byId('hub-stats-body'));
             }
         }
+        // Edge reads the session ledger and the stored calculator config, both
+        // of which change from inside the panel itself — so it re-renders on
+        // open like Stats rather than being built once like Charts.
+        if (name === 'edge') {
+            if (BJ.EdgeRender && typeof BJ.EdgeRender.render === 'function') {
+                BJ.EdgeRender.render(byId('hub-edge-body'));
+            }
+        }
         if (name === 'path') {
             if (BJ.PathRender && typeof BJ.PathRender.render === 'function') {
                 BJ.PathRender.render(byId('hub-path-body'));
@@ -207,6 +215,8 @@
         // Standalone count drills — their own screen, not a game mode.
         var speed = byId('btn-drill-speed');
         if (speed) speed.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('speed'); });
+        var manual = byId('btn-drill-manual');
+        if (manual) manual.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('manual'); });
         var estim = byId('btn-drill-estimation');
         if (estim) estim.addEventListener('click', function () { if (BJ.CountDrills) BJ.CountDrills.open('estimation'); });
         var trueCount = byId('btn-drill-truecount');

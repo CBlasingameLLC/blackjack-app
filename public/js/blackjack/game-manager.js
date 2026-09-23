@@ -1129,6 +1129,22 @@
 
             // Raw per-decision point for the accuracy-over-time trend.
             Storage.pushDecision({ t: Date.now(), correct: !!correct, mode });
+            // Per-mode rolling window — mastery.js reads this as "current
+            // form" to flag a certified section that has gone rusty. Kept
+            // separate from the shared accuracy_history ring for the reason
+            // documented on pushRollingResult.
+            Storage.pushRollingResult(mode, !!correct);
+
+            // A live checkout consumes decisions from its own section only;
+            // Mastery ignores everything else, so this can fire unconditionally.
+            if (BJ.Mastery) {
+                const attempt = BJ.Mastery.recordDecision(mode, correct);
+                if (attempt && attempt.verdict !== 'active') {
+                    this._emit('onCheckoutFinished', attempt);
+                } else if (attempt) {
+                    this._emit('onCheckoutUpdate', attempt);
+                }
+            }
 
             // Phase 4c: XP/streak/achievements/daily-challenge all flow from
             // this ONE choke point — every graded decision in the app
@@ -1218,6 +1234,11 @@
                     Storage.setCertification(rec);
                 }
             }
+            // Same ordering workaround, same reason: _recordDecision has
+            // already failed the checkout by the time the structured entry
+            // exists, and the hand that broke it is the useful half of the
+            // verdict. No-ops unless an attempt just failed without one.
+            if (BJ.Mastery) BJ.Mastery.noteMistake(entry);
             this._emit('onMistakeLogged', entry);
         }
 

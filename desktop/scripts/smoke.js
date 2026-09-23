@@ -53,6 +53,8 @@ const WELLS = [
     '.stats-mistake-list',
     '.heatmap-wrap',
     '[data-section="accuracy"] .bar-chart',
+    '.edge-sessions',
+    '[data-section="achievements"] .achv-grid',
     '#reference-modal-body'
 ];
 
@@ -195,7 +197,16 @@ app.whenReady().then(async () => {
     // EXACTLY five. A >= here would pass just as happily on a leaked profile,
     // which is precisely the bug that isolation exists to prevent.
     eq(snap.stats.lifetime.decisions, 5, 'exactly the 5 graded decisions reached disk (proves a clean profile)');
-    eq(Array.isArray(snap.ladder) && snap.ladder.length === 5, true, 'snapshot carries all 5 ladder stages');
+    // Nine now, not five: the pooled five-rung ladder was split per chart so a
+    // player cannot be certified on a table they have never been shown.
+    // Still EXACTLY nine, for the same reason the decision count above is
+    // exact — a >= would pass on a leaked profile too.
+    eq(Array.isArray(snap.ladder) && snap.ladder.length === 9, true, 'snapshot carries all 9 ladder sections');
+    eq(Array.isArray(snap.tiers) && snap.tiers.length === 3, true, 'and the three tiers they group into');
+    // The sections must be genuinely independent in the snapshot the coach
+    // reads, not a shared bucket wearing nine labels.
+    eq(snap.ladder.filter((s) => s.decisions > 0).length, 1,
+        'only the section actually drilled has decisions against it');
 
     const store = JSON.parse(fs.readFileSync(storePath, 'utf8'));
     eq(Object.keys(store.kv).some((k) => k.startsWith('junto_blackjack_')), true, 'store.json mirrors the real kv keys');

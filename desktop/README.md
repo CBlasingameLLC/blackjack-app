@@ -40,6 +40,14 @@ Individually:
 | `npm run icon` | regenerates `build/icon.ico` + `icon.png` from the SVG mark in `scripts/make-icon.js` |
 | `npm run shoot` | boots on a seeded profile and screenshots every screen at 1280x800 — for looking, not asserting |
 
+The engine's own suites live in the repo root and run with `npm run verify`
+from there. Two are new:
+
+| command | what it proves |
+|---|---|
+| `node scripts/verify-mastery.js` | sections are independent, the bar sits above the 95% edge-erasure line, a checkout is flawless and consumes only its own section, and mastery survives rust |
+| `node scripts/verify-ev.js` | the true-count distribution matches published Hi-Lo frequencies, multiple hands are correlated rather than independent, and risk of ruin refuses to be comforting about a game with no edge |
+
 ## The desktop skin
 
 **`public/css/desktop.css` is loaded only inside Electron and it is the only
@@ -121,6 +129,50 @@ claude mcp add blackjack -- node "C:/Users/19035/Documents/blackjack-app/desktop
 Tools: `get_player`, `get_stats`, `get_trends`, `get_mistakes`,
 `get_achievements`, `get_snapshot`. All read-only, by construction.
 
+## Mastery, checkouts and the Edge
+
+**Mastery is per section, and a section is mastered by volume PLUS a flawless
+checkout.** The old five-rung ladder certified "Basic Strategy" at 90% over 30
+*pooled* decisions, which was wrong twice over. 90% is one error in ten, and
+the published figure is that one repeated basic-strategy error per **twenty**
+hands is enough to erase a counter's edge — so the app was congratulating a
+player at double the error rate at which counting stops paying. And pooling
+`hard`/`soft`/`pairs` into one bucket meant thirty hard totals and no pair and
+no soft hand still read as mastered: you could be certified on a chart you had
+never been shown. `mastery.js` owns all of it; `gamification.js` reads it and
+computes none of it.
+
+**"100%" attaches to the checkout run, not to lifetime accuracy.** A lifetime
+100% requirement is unreachable by construction — one mistake in your first
+session would poison a section forever — so a checkout is a *bounded,
+retryable* run that must be flawless. That is what the word means in the
+counting schools, and it is the only reading that can actually be passed.
+
+**Checkouts are gated in tier order; practice never is.** You may drill
+anything at any time; you may not certify out of order. Basic strategy is the
+stated prerequisite for counting, not a parallel track.
+
+**Mastery is never revoked — rust is reported beside it.** A rolling per-mode
+window gives "current form" as a separate fact from "was certified". Taking a
+badge away for a bad session punishes the practice that surfaced the problem,
+and a player who learns that drilling can cost them a rank stops drilling what
+they are worst at.
+
+**The numbers, and where they come from.** Counting down a deck in under 30
+seconds (25 as the stretch goal), five clean runs in a row; eight six-deck
+shoes near error-free for the final gate, the form the MIT team used; ~20
+hours to master basic strategy. Basic strategy asks for 1,450 logged decisions
+before a single checkout opens — about forty-eight times the old bar.
+
+**The Edge tab is two views.** `ev.js` is the analytic model — the true-count
+distribution a shoe actually produces, the edge at each count, the bet at each
+count — and everything else (hourly EV, standard deviation, risk of ruin, N0,
+and the bankroll a spread *needs*) falls out of those three. `bankroll.js` is
+the real-session ledger, in integer cents, plotting actual profit against what
+the game owed you over the same hours. The second line is the point: a profit
+curve alone is a record of variance for the first several hundred hours of
+anyone's play.
+
 ## Known gaps
 
 - **Sound has never worked, on any platform.** `audio.js` fetches five `.wav`
@@ -136,6 +188,17 @@ Tools: `get_player`, `get_stats`, `get_trends`, `get_mistakes`,
   publisher" prompt once. Signing is a certificate purchase, not a config change.
 - **The bankroll renders unrounded** — a 3:2 payout on $25 shows as
   `$10,062.5`. Pre-existing and in the shared money formatting, not the skin.
+- **The EV model is analytic, not simulated**, and its assumptions are listed
+  at the top of `ev.js`. Two are worth repeating: edge is linear in the true
+  count (the standard Hi-Lo approximation, which drifts at extremes where the
+  frequencies are negligible), and variance per unit is constant, so risk of
+  ruin is a mild *under*-estimate at aggressive spreads. Monte Carlo was
+  considered and deliberately not built — the closed form is exact for the
+  model it describes and can be checked against numbers a reader can verify.
+- **The session ledger is typed in by hand.** Nothing reads a casino's system,
+  so the expected line is only as good as the EV figure entered with each
+  session. "Use calculator EV" fills it from the current spread for exactly
+  that reason.
 - **The felt is sparse at 1280x800.** One hand on a table built for a full
   window is the honest look of a single-spot game; multi-spot play is the next
   milestone and is what that space is reserved for. The 340px "coming soon"

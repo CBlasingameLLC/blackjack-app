@@ -135,6 +135,11 @@
                             <span class="tile__name">Speed Count</span>
                             <span class="tile__sub">Count N cards, fast</span>
                         </button>
+                        <button id="btn-drill-manual" class="tile tile--manual" type="button">
+                            <span class="tile__glyph"><i class="icon solid fa-stopwatch"></i></span>
+                            <span class="tile__name">Deck Countdown</span>
+                            <span class="tile__sub">Self-paced, against the clock</span>
+                        </button>
                         <button id="btn-drill-estimation" class="tile tile--estim" type="button">
                             <span class="tile__glyph"><i class="icon solid fa-ruler-vertical"></i></span>
                             <span class="tile__name">Deck Estimation</span>
@@ -243,6 +248,13 @@
                 <div id="hub-charts-body" class="hub-fill"></div>
             </section>
 
+            <!-- EDGE — the bankroll ledger and the EV calculator, rendered by
+                 hub.js via BJ.EdgeRender. hub-fill, not hub-scroll: both views
+                 are laid out to the panel like Charts, not stacked like Stats. -->
+            <section class="hub-panel" data-panel="edge">
+                <div id="hub-edge-body" class="hub-fill"></div>
+            </section>
+
             <!-- STATS (rendered by hub.js via BJ.StatsRender) -->
             <section class="hub-panel" data-panel="stats">
                 <div id="hub-stats-body" class="hub-scroll"></div>
@@ -308,6 +320,7 @@
             <button class="hub-tab active" data-tab="path" type="button"><i class="icon solid fa-route"></i><span>Path</span></button>
             <button class="hub-tab" data-tab="practice" type="button"><i class="icon solid fa-dumbbell"></i><span>Practice</span></button>
             <button class="hub-tab" data-tab="charts" type="button"><i class="icon solid fa-th"></i><span>Charts</span></button>
+            <button class="hub-tab" data-tab="edge" type="button"><i class="icon solid fa-coins"></i><span>Edge</span></button>
             <button class="hub-tab" data-tab="stats" type="button"><i class="icon solid fa-chart-line"></i><span>Stats</span></button>
             <button class="hub-tab" data-tab="profile" type="button"><i class="icon solid fa-user-circle"></i><span>Profile</span></button>
         </nav>
@@ -508,6 +521,11 @@
     <script defer src="/js/blackjack/count.js"></script>
     <script defer src="/js/blackjack/strategy-engine.js"></script>
     <script defer src="/js/blackjack/persistence.js"></script>
+    <!-- mastery.js before gamification.js: gamification captures BJ.Mastery at
+         module-load time (same pattern it uses for BJ.Storage), so loading it
+         after would leave that reference undefined and every ladder read
+         would throw on the first graded decision. -->
+    <script defer src="/js/blackjack/mastery.js"></script>
     <script defer src="/js/blackjack/gamification.js"></script>
     <script defer src="/js/blackjack/certification.js"></script>
     <script defer src="/js/blackjack/game-manager.js"></script>
@@ -516,6 +534,9 @@
     <script defer src="/js/blackjack/ui-bindings.js"></script>
     <script defer src="/js/blackjack/reference-render.js"></script>
     <script defer src="/js/blackjack/stats-render.js"></script>
+    <script defer src="/js/blackjack/ev.js"></script>
+    <script defer src="/js/blackjack/bankroll.js"></script>
+    <script defer src="/js/blackjack/edge-render.js"></script>
     <script defer src="/js/blackjack/boot.js"></script>
     <!-- These load AFTER boot.js on purpose: they init on window 'load', and
          their handlers must run second so BJ.instance already exists. -->

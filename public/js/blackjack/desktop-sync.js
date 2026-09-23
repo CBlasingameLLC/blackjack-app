@@ -79,9 +79,15 @@
                 currentStreak: progression.currentStreak,
                 bestStreak: progression.bestStreak,
                 stagesMastered: ladder.masteredCount,
-                currentStageId: ladder.currentStageId
+                totalSections: ladder.totalSections,
+                currentStageId: ladder.currentSectionId
             },
-            ladder: ladder.stages,
+            // Renamed upstream from `stages` to `sections` when the pooled
+            // five-rung ladder was split per chart (mastery.js). The snapshot
+            // key stays `ladder` so the MCP tools and anything already reading
+            // a stored snapshot keep working; the shape inside is richer.
+            ladder: ladder.sections,
+            tiers: ladder.tiers,
             stats: {
                 lifetime: {
                     decisions: lifetime.decisionsTotal || 0,

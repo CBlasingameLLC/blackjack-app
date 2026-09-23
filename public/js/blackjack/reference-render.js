@@ -243,13 +243,55 @@
         return legend;
     }
 
+    /**
+     * The three basic-strategy tables SIDE BY SIDE under one tab.
+     *
+     * They used to be three separate tabs, which meant that checking whether
+     * A,7 vs 9 and hard 16 vs 9 agreed with each other was two clicks and a
+     * memory test — and comparing across the charts is most of what looking a
+     * chart up is actually for. One screen also matches how every printed
+     * strategy card in existence is laid out.
+     *
+     * Each table keeps `table-layout: fixed; width/height: 100%` so the three
+     * columns distribute themselves into whatever box the grid gives them;
+     * see the LAYOUT CONTRACT note at the top of this file. On a phone the
+     * triptych stacks (blackjack.css), because ten dealer columns three
+     * abreast at 375px is not a chart, it is a smear.
+     */
+    function buildBasicTriptych() {
+        var wrap = el('div', 'chart-triptych');
+        [
+            { title: 'Hard Totals', build: buildHardTable },
+            { title: 'Soft Totals', build: buildSoftTable },
+            { title: 'Pairs', build: buildPairTable }
+        ].forEach(function (spec) {
+            var col = el('div', 'chart-triptych__col');
+            col.appendChild(el('h4', 'chart-triptych__title', spec.title));
+            col.appendChild(spec.build());
+            wrap.appendChild(col);
+        });
+        return wrap;
+    }
+
+    /** Deviations beside the rules/Hi-Lo/surrender reference. */
+    function buildAdvancedPanel() {
+        var wrap = el('div', 'chart-advanced');
+
+        var devCol = el('div', 'chart-advanced__col chart-advanced__col--dev');
+        devCol.appendChild(el('h4', 'chart-triptych__title', 'Illustrious 18 & Fab 4'));
+        devCol.appendChild(buildDeviationsTable());
+        wrap.appendChild(devCol);
+
+        var refCol = el('div', 'chart-advanced__col chart-advanced__col--ref');
+        refCol.appendChild(buildRulesPanel());
+        wrap.appendChild(refCol);
+
+        return wrap;
+    }
+
     var CHARTS = [
-        { id: 'hard', label: 'Hard', build: buildHardTable, legend: true },
-        { id: 'soft', label: 'Soft', build: buildSoftTable, legend: true },
-        { id: 'pairs', label: 'Pairs', build: buildPairTable, legend: true },
-        { id: 'deviations', label: 'Dev', build: buildDeviationsTable, legend: false },
-        // Surrender lives inside the Rules panel now (buildSurrenderBlock).
-        { id: 'rules', label: 'Rules', build: buildRulesPanel, legend: false }
+        { id: 'basic', label: 'Basic Strategy', build: buildBasicTriptych, legend: true },
+        { id: 'advanced', label: 'Deviations & Rules', build: buildAdvancedPanel, legend: false }
     ];
 
     var ReferenceRender = {

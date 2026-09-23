@@ -11,7 +11,7 @@
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
     "build:cap": "vite build && npx cap sync",
-    "verify": "node scripts/verify-hilo-count.js && node scripts/verify-strategy-chart.js && node scripts/verify-tablesim.js && node scripts/verify-certification.js"
+    "verify": "node scripts/verify-hilo-count.js && node scripts/verify-strategy-chart.js && node scripts/verify-tablesim.js && node scripts/verify-certification.js && node scripts/verify-mastery.js && node scripts/verify-ev.js"
   },
   "devDependencies": {
     "vite": "^6.0.0",

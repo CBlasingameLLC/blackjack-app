@@ -37,7 +37,8 @@
 
     var Storage = BJ.Storage || (typeof module !== 'undefined' ? require('./persistence.js') : undefined);
 
-    var MASTERY_THRESHOLD_PCT = 90;
+    var Mastery = BJ.Mastery || (typeof module !== 'undefined' ? require('./mastery.js') : undefined);
+
     // --- the XP curve (v2) ----------------------------------------------
     // v1 was FLAT: `level = 1 + floor(xp / 100)`, with every correct decision
     // worth exactly 1 XP. Level 40 therefore cost precisely what level 2 cost
@@ -93,15 +94,25 @@
 
     function xpForDecision(mode) { return XP_BY_MODE[mode] || 1; }
 
-    var RANK_TITLES = ['Novice', 'Strategist', 'Counter', 'Advantage Player', 'Card Sharp', 'Master Counter'];
-
     var STRATEGY_DRILL_MODES = { hard: 1, soft: 1, pairs: 1, deviations: 1, surrender: 1, targeted: 1 };
 
     // ------------------------------------------------------------------
-    // the skill ladder
+    // the skill ladder — now owned by mastery.js
     // ------------------------------------------------------------------
+    //
+    // The five-rung ladder that used to live here mastered "Basic Strategy"
+    // at 90% over 30 POOLED decisions, so thirty hard totals and no pair and
+    // no soft hand read as mastered. Both halves of that are fixed in
+    // mastery.js: sections are independent, and the bar is volume plus a
+    // flawless checkout. This file keeps XP, streaks, achievements and the
+    // daily challenge, and reads mastery rather than computing it — there is
+    // exactly one definition of "mastered" in the app and it is not here.
 
-    /** Sums total/correct across `modes` from a lifetime-stats bucket. */
+    function getLadderStatus() {
+        return Mastery.getStatus();
+    }
+
+    /** Lifetime total/correct across a set of stats-bucket modes. */
     function combinedAccuracy(lifetime, modes) {
         var total = 0, correct = 0;
         var byMode = lifetime.byMode || {};
@@ -112,76 +123,35 @@
         return { pct: total > 0 ? Math.round((correct / total) * 100) : null, samples: total };
     }
 
-    var LADDER_STAGES = [
-        {
-            id: 'basic', order: 1, title: 'Basic Strategy',
-            tagline: 'Hard, Soft & Pairs — the foundation',
-            icon: 'fa-hashtag', minSamples: 30,
-            // Certification decisions ARE basic-strategy decisions, graded
-            // under exam conditions, so they count toward this rung too.
-            compute: function (lifetime) { return combinedAccuracy(lifetime, ['hard', 'soft', 'pairs', 'certify']); }
-        },
-        {
-            id: 'running-count', order: 2, title: 'Running Count',
-            tagline: 'Track the count — Speed Count & running checks',
-            icon: 'fa-bolt', minSamples: 15,
-            compute: function (lifetime) { return combinedAccuracy(lifetime, ['count-speed', 'count-running']); }
-        },
-        {
-            id: 'count-strategy', order: 3, title: 'Count + Strategy',
-            tagline: 'Play full hands while keeping the count',
-            icon: 'fa-object-group', minSamples: 20,
-            // See file header: approximated as min(basic %, running-count %).
-            compute: function (lifetime) {
-                var basic = combinedAccuracy(lifetime, ['hard', 'soft', 'pairs']);
-                var count = combinedAccuracy(lifetime, ['count-running']);
-                var samples = Math.min(basic.samples, count.samples);
-                if (basic.pct === null || count.pct === null) return { pct: null, samples: samples };
-                return { pct: Math.min(basic.pct, count.pct), samples: samples };
-            }
-        },
-        {
-            id: 'true-count', order: 4, title: 'True Count',
-            tagline: 'Convert running count into true count',
-            icon: 'fa-divide', minSamples: 10,
-            compute: function (lifetime) { return combinedAccuracy(lifetime, ['count-true']); }
-        },
-        {
-            id: 'deviations', order: 5, title: 'Deviations',
-            tagline: 'Full Test Out — strategy, true count & Illustrious 18',
-            icon: 'fa-crown', minSamples: 20,
-            compute: function (lifetime) { return combinedAccuracy(lifetime, ['testout']); }
-        }
-    ];
+    // ------------------------------------------------------------------
+    // practice days
+    // ------------------------------------------------------------------
 
     /**
-     * The full ladder, each stage resolved to a status:
-     *   'not-started' (0 samples) | 'in-progress' (samples but not mastered
-     *   or below minSamples) | 'mastered' (>= minSamples AND pct >= 90).
-     * `currentStageId` is the first non-mastered stage — the "what's next"
-     * recommendation — or the last stage once everything is mastered.
+     * Distinct days on which at least one decision was graded, plus the
+     * consecutive run of them. Volume alone can be crammed in one sitting,
+     * and cramming is exactly how a chart gets recalled for an evening and
+     * lost by the weekend — so the achievements that reward showing up read
+     * days, not decisions.
      */
-    function getLadderStatus() {
-        var lifetime = Storage.getLifetimeStats();
-        var stages = LADDER_STAGES.map(function (stage) {
-            var result = stage.compute(lifetime);
-            var eligible = result.samples >= stage.minSamples;
-            var status = (result.pct !== null && eligible && result.pct >= MASTERY_THRESHOLD_PCT)
-                ? 'mastered'
-                : (result.samples > 0 ? 'in-progress' : 'not-started');
-            return {
-                id: stage.id, order: stage.order, title: stage.title, tagline: stage.tagline, icon: stage.icon,
-                pct: result.pct, samples: result.samples, minSamples: stage.minSamples, status: status
-            };
-        });
-        var masteredCount = stages.filter(function (s) { return s.status === 'mastered'; }).length;
-        var current = stages.filter(function (s) { return s.status !== 'mastered'; })[0] || stages[stages.length - 1];
-        return {
-            stages: stages,
-            masteredCount: masteredCount,
-            currentStageId: current.id,
-            rankTitle: RANK_TITLES[Math.max(0, Math.min(RANK_TITLES.length - 1, masteredCount))]
-        };
+    function touchPracticeDay() {
+        var p = Storage.getProgression();
+        var today = todayStr();
+        if (p.lastPracticeDay === today) return p;
+
+        var yesterday = (function () {
+            var d = new Date();
+            d.setDate(d.getDate() - 1);
+            var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        })();
+
+        p.daysPracticed = (p.daysPracticed || 0) + 1;
+        p.dayStreak = (p.lastPracticeDay === yesterday) ? (p.dayStreak || 0) + 1 : 1;
+        if ((p.dayStreak || 0) > (p.bestDayStreak || 0)) p.bestDayStreak = p.dayStreak;
+        p.lastPracticeDay = today;
+        Storage.setProgression(p);
+        return p;
     }
 
     // ------------------------------------------------------------------
@@ -195,17 +165,60 @@
      * bigger deals than a single correct decision, so they pay out more
      * than the steady +1-XP-per-correct-decision trickle.
      */
+    /** True once the named section's checkout has been passed. */
+    function sectionMastered(ctx, id) {
+        var s = (ctx.ladder.sections || []).filter(function (x) { return x.id === id; })[0];
+        return !!(s && s.mastered);
+    }
+    /** True once every section in a tier is mastered. */
+    function tierMastered(ctx, tierId) {
+        var own = (ctx.ladder.sections || []).filter(function (s) { return s.tier === tierId; });
+        return own.length > 0 && own.every(function (s) { return s.mastered; });
+    }
+
     var ACHIEVEMENTS = [
+        // --- volume: the grind, stated plainly -------------------------
+        // The old set topped out at 1,000 lifetime decisions, which is less
+        // than the volume ONE basic-strategy section now requires before its
+        // checkout even opens. A ladder whose last rung is reached before the
+        // real work starts stops pulling.
         { id: 'first-steps', title: 'First Steps', description: 'Complete your first graded decision.', icon: 'fa-shoe-prints',
             check: function (ctx) { return ctx.lifetime.decisionsTotal >= 1; } },
         { id: 'century', title: 'Century', description: '100 lifetime decisions.', icon: 'fa-medal',
             check: function (ctx) { return ctx.lifetime.decisionsTotal >= 100; } },
         { id: 'millennium', title: 'Millennium', description: '1,000 lifetime decisions.', icon: 'fa-trophy',
             check: function (ctx) { return ctx.lifetime.decisionsTotal >= 1000; } },
+        { id: 'five-thousand', title: 'Five Thousand', description: '5,000 lifetime decisions.', icon: 'fa-award', stageBonus: 100,
+            check: function (ctx) { return ctx.lifetime.decisionsTotal >= 5000; } },
+        { id: 'ten-thousand', title: 'Ten Thousand Hands', description: '10,000 lifetime decisions.', icon: 'fa-gem', stageBonus: 200,
+            check: function (ctx) { return ctx.lifetime.decisionsTotal >= 10000; } },
+        { id: 'twenty-five-thousand', title: 'The Long Grind', description: '25,000 lifetime decisions.', icon: 'fa-mountain', stageBonus: 400,
+            check: function (ctx) { return ctx.lifetime.decisionsTotal >= 25000; } },
+
+        // --- streaks ----------------------------------------------------
         { id: 'hot-streak', title: 'Hot Streak', description: '10 correct decisions in a row.', icon: 'fa-fire',
             check: function (ctx) { return ctx.progression.bestStreak >= 10; } },
         { id: 'iron-focus', title: 'Iron Focus', description: '25 correct decisions in a row.', icon: 'fa-bullseye',
             check: function (ctx) { return ctx.progression.bestStreak >= 25; } },
+        { id: 'unbroken', title: 'Unbroken', description: '50 correct decisions in a row.', icon: 'fa-link', stageBonus: 75,
+            check: function (ctx) { return ctx.progression.bestStreak >= 50; } },
+        { id: 'metronome', title: 'Metronome', description: '100 correct decisions in a row.', icon: 'fa-infinity', stageBonus: 150,
+            check: function (ctx) { return ctx.progression.bestStreak >= 100; } },
+
+        // --- showing up -------------------------------------------------
+        // Distinct DAYS, not decisions. Volume can be crammed in one sitting;
+        // a chart crammed in one sitting is gone by the weekend.
+        { id: 'came-back', title: 'Came Back', description: 'Practise two days running.', icon: 'fa-calendar-check',
+            check: function (ctx) { return (ctx.progression.bestDayStreak || 0) >= 2; } },
+        { id: 'week-straight', title: 'Seven Straight', description: 'Practise seven days in a row.', icon: 'fa-calendar-week', stageBonus: 100,
+            check: function (ctx) { return (ctx.progression.bestDayStreak || 0) >= 7; } },
+        { id: 'month-straight', title: 'Thirty Straight', description: 'Practise thirty days in a row.', icon: 'fa-calendar-alt', stageBonus: 300,
+            check: function (ctx) { return (ctx.progression.bestDayStreak || 0) >= 30; } },
+        { id: 'fifty-days', title: 'Fifty Sessions', description: 'Practise on fifty separate days.', icon: 'fa-hourglass-half', stageBonus: 200,
+            check: function (ctx) { return (ctx.progression.daysPracticed || 0) >= 50; } },
+
+        // --- first correct answers (kept: they mark the moment a drill
+        //     stops being unfamiliar, which is worth its own small note) ---
         { id: 'sharp-eyes', title: 'Sharp Eyes', description: 'First correct Deck Estimation.', icon: 'fa-ruler-vertical',
             check: function (ctx) { return ((ctx.lifetime.byMode || {}).estimation || {}).correct >= 1; } },
         { id: 'quick-count', title: 'Quick Count', description: 'First correct Speed Count.', icon: 'fa-bolt',
@@ -214,16 +227,42 @@
             check: function (ctx) { return ((ctx.lifetime.byMode || {})['count-true'] || {}).correct >= 1; } },
         { id: 'steady-hand', title: 'Steady Hand', description: 'First correct running-count check.', icon: 'fa-hand-paper',
             check: function (ctx) { return ((ctx.lifetime.byMode || {})['count-running'] || {}).correct >= 1; } },
-        { id: 'stage-basic', title: 'Basic Strategy Master', description: 'Mastered the Basic Strategy stage.', icon: 'fa-hashtag', stageBonus: STAGE_XP_BONUS,
-            check: function (ctx) { return ctx.ladder.stages[0].status === 'mastered'; } },
-        { id: 'stage-count', title: 'Counter', description: 'Mastered the Running Count stage.', icon: 'fa-bolt', stageBonus: STAGE_XP_BONUS,
-            check: function (ctx) { return ctx.ladder.stages[1].status === 'mastered'; } },
-        { id: 'stage-combo', title: 'Advantage Player', description: 'Mastered Count + Strategy.', icon: 'fa-object-group', stageBonus: STAGE_XP_BONUS,
-            check: function (ctx) { return ctx.ladder.stages[2].status === 'mastered'; } },
-        { id: 'stage-truecount', title: 'Card Sharp', description: 'Mastered True Count.', icon: 'fa-divide', stageBonus: STAGE_XP_BONUS,
-            check: function (ctx) { return ctx.ladder.stages[3].status === 'mastered'; } },
-        { id: 'stage-deviations', title: 'Master Counter', description: 'Mastered every stage of the ladder.', icon: 'fa-crown', stageBonus: LADDER_COMPLETE_XP_BONUS,
-            check: function (ctx) { return ctx.ladder.masteredCount === 5; } }
+
+        // --- the deck countdown benchmark -------------------------------
+        { id: 'under-thirty', title: 'Under Thirty', description: 'Count down a deck inside 30 seconds, accurately.', icon: 'fa-stopwatch',
+            check: function (ctx) { return (ctx.countdown.best || 0) >= 1; } },
+        { id: 'under-twenty-five', title: 'Stretch Pace', description: 'Count down a deck inside 25 seconds, accurately.', icon: 'fa-tachometer-alt', stageBonus: 100,
+            check: function (ctx) { return !!ctx.countdown.stretchHit; } },
+        { id: 'five-clean', title: 'Five Clean', description: 'Five clean deck countdowns in a row — the published bar.', icon: 'fa-check-double', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return (ctx.countdown.best || 0) >= 5; } },
+
+        // --- per-section checkouts --------------------------------------
+        // One per section, because the whole point of splitting them is that
+        // mastering hard totals says nothing about pairs.
+        { id: 'sec-hard', title: 'Hard Totals', description: 'Passed the Hard Totals checkout.', icon: 'fa-hashtag', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'hard'); } },
+        { id: 'sec-soft', title: 'Soft Totals', description: 'Passed the Soft Totals checkout.', icon: 'fa-feather', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'soft'); } },
+        { id: 'sec-pairs', title: 'Pairs', description: 'Passed the Pairs checkout.', icon: 'fa-clone', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'pairs'); } },
+        { id: 'sec-surrender', title: 'Surrender', description: 'Passed the Surrender checkout.', icon: 'fa-flag', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'surrender'); } },
+        { id: 'sec-running', title: 'Running Count', description: 'Passed the Running Count checkout.', icon: 'fa-bolt', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'running-count'); } },
+        { id: 'sec-estimation', title: 'Deck Estimation', description: 'Passed the Deck Estimation checkout.', icon: 'fa-ruler-vertical', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'estimation'); } },
+        { id: 'sec-truecount', title: 'True Count', description: 'Passed the True Count checkout.', icon: 'fa-divide', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'true-count'); } },
+        { id: 'sec-deviations', title: 'Deviations', description: 'Passed the Deviations checkout.', icon: 'fa-code-branch', stageBonus: STAGE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'deviations'); } },
+
+        // --- tiers and the final gate -----------------------------------
+        { id: 'tier-basic', title: 'Perfect Basic Strategy', description: 'Every Basic Strategy section mastered — the real starting line.', icon: 'fa-layer-group', stageBonus: 300,
+            check: function (ctx) { return tierMastered(ctx, 'basic'); } },
+        { id: 'tier-counting', title: 'Counter', description: 'Every Counting section mastered.', icon: 'fa-calculator', stageBonus: 300,
+            check: function (ctx) { return tierMastered(ctx, 'counting'); } },
+        { id: 'the-checkout', title: 'The Checkout', description: 'Eight six-deck shoes, near error-free.', icon: 'fa-crown', stageBonus: LADDER_COMPLETE_XP_BONUS,
+            check: function (ctx) { return sectionMastered(ctx, 'full-game'); } }
     ];
 
     function addXP(amount) {
@@ -237,7 +276,8 @@
         var lifetime = Storage.getLifetimeStats();
         var progression = Storage.getProgression();
         var ladder = getLadderStatus();
-        var ctx = { lifetime: lifetime, progression: progression, ladder: ladder };
+        var countdown = Storage.get('countdown_record', null) || { streak: 0, best: 0 };
+        var ctx = { lifetime: lifetime, progression: progression, ladder: ladder, countdown: countdown };
         var unlocked = [];
         ACHIEVEMENTS.forEach(function (def) {
             var qualifies = false;
@@ -332,8 +372,6 @@
     // ------------------------------------------------------------------
 
     var Gamification = {
-        MASTERY_THRESHOLD_PCT: MASTERY_THRESHOLD_PCT,
-        LADDER_STAGES: LADDER_STAGES,
         ACHIEVEMENTS: ACHIEVEMENTS,
         CHALLENGE_TEMPLATES: CHALLENGE_TEMPLATES,
 
@@ -382,6 +420,11 @@
          * @returns {{achievements: Array, challengeCompletions: Array}}
          */
         onDecision: function (mode, correct) {
+            // Stamped before the streak update so the day is credited even on
+            // a session that opens with a miss — "did you show up" is not a
+            // question about whether you got it right.
+            touchPracticeDay();
+
             var p = Storage.getProgression();
             if (correct) {
                 p.xp += xpForDecision(mode);

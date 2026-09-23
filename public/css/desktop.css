@@ -28,7 +28,7 @@
    genuinely about money are re-gilded explicitly in §2.
 
    THE LAYOUT CONTRACT: NOTHING SCROLLS. No screen, no panel, no page. The
-   only exceptions are the four designated wells in §10 — bounded cards whose
+   only exceptions are the six designated wells in §11 — bounded cards whose
    content is genuinely unbounded (your mistake log has no maximum length) —
    and each of those is a fixed box on screen in full, scrolling inside
    itself with no visible scrollbar. The floor is 1280x800 of CONTENT, which
@@ -43,6 +43,7 @@
      8. Charts                   9. Stats
     10. Profile                 11. Designated scroll wells
     12. The table               13. Count drills, overlays, toasts
+    14. The Edge (bankroll + EV calculator)
    ========================================================================== */
 
 /* =========================================
@@ -90,13 +91,25 @@ html.is-desktop-app {
     --r-lg: 9px;
     --r-xl: 12px;
 
-    /* Held down deliberately. At 146px the player's hand needed more room than
-       the felt has between the bet spot and the action bar, and a flex row
-       that is allowed to shrink does not report that — it just draws the
-       cards past its own bottom edge and under the dashboard. */
-    --card-w: 96px;
-    --card-h: 134px;
-    --card-overlap: -58px;
+    /* Sized to be READ from a desk, which the first pass at 96x134 was not.
+       The earlier note here said these were held down because a taller hand
+       overran the felt — true of the layout at the time, and fixed properly
+       rather than worked around: .hand-cards is `height: auto; min-height`
+       with flex-end alignment (§12), so a hand column can be the cards plus
+       its score badge instead of silently drawing past its own bottom edge,
+       and §12's zone padding was re-measured against this size. Growing these
+       alone would still not have helped — see the font-size note in §12, which
+       is why the cards read as small even after they got bigger. */
+    --card-w: 128px;
+    --card-h: 176px;
+    /* Not the phone's ~60% of the card width. That ratio exists because a
+       375px screen has to fit a split hand's worth of cards across it, and it
+       leaves only the rank-and-suit corner of every card but the last
+       showing. There is no such pressure here — six cards at this overlap
+       come to 488px on a felt over a thousand wide — and a hand you can only
+       read down its left edge is the opposite of what growing the cards was
+       for. 56px leaves the corner AND the pip of each card visible. */
+    --card-overlap: -56px;
 
     /* The rail, and the height of the action block at its foot. Two numbers,
        referenced by the four rules in section 3 and by nothing else. */
@@ -319,6 +332,7 @@ html.is-desktop-app {
    There is no such collision here, and a primary action that disappears when
    you look something up is a worse trade on a screen this size. */
 .is-desktop-app .hub[data-active-tab="charts"] .hub__cta,
+.is-desktop-app .hub[data-active-tab="edge"] .hub__cta,
 .is-desktop-app .hub[data-active-tab="stats"] .hub__cta,
 .is-desktop-app .hub[data-active-tab="profile"] .hub__cta {
     display: flex;
@@ -361,12 +375,14 @@ html.is-desktop-app {
 .is-desktop-app .hub[data-active-tab="path"]     .hub__top::before { content: 'The Path'; }
 .is-desktop-app .hub[data-active-tab="practice"] .hub__top::before { content: 'Practice'; }
 .is-desktop-app .hub[data-active-tab="charts"]   .hub__top::before { content: 'Reference'; }
+.is-desktop-app .hub[data-active-tab="edge"]     .hub__top::before { content: 'The Edge'; }
 .is-desktop-app .hub[data-active-tab="stats"]    .hub__top::before { content: 'Statistics'; }
 .is-desktop-app .hub[data-active-tab="profile"]  .hub__top::before { content: 'Profile'; }
 
-.is-desktop-app .hub[data-active-tab="path"]     .hub__top::after { content: 'Five stages, in order. Master one to move on.'; }
+.is-desktop-app .hub[data-active-tab="path"]     .hub__top::after { content: 'Nine sections in three tiers. Volume, then a flawless checkout.'; }
 .is-desktop-app .hub[data-active-tab="practice"] .hub__top::after { content: 'Pick a drill on the left, set it up on the right.'; }
 .is-desktop-app .hub[data-active-tab="charts"]   .hub__top::after { content: '6 decks · S17 · DAS · late surrender · 75% penetration'; }
+.is-desktop-app .hub[data-active-tab="edge"]     .hub__top::after { content: 'What the game owes you, and what it has paid.'; }
 .is-desktop-app .hub[data-active-tab="stats"]    .hub__top::after { content: 'Everything graded, since the first hand.'; }
 .is-desktop-app .hub[data-active-tab="profile"]  .hub__top::after { content: 'Rank, achievements, and how the app behaves.'; }
 
@@ -383,8 +399,11 @@ html.is-desktop-app {
     /* A fixed strip rather than `auto`: it gives the challenge real presence
        and takes height back off the ladder rows, which had more of it than
        they had content to put in it. */
-    grid-template-rows: 118px minmax(0, 1fr);
-    gap: 14px 16px;
+    /* 118px before the ladder became nine sections in three columns. The
+       Basic Strategy tier holds four cards and needs every pixel this strip
+       is not using; the challenge card reads fine at 100. */
+    grid-template-rows: 100px minmax(0, 1fr);
+    gap: 12px 16px;
 }
 .is-desktop-app .path-header {
     grid-area: 1 / 1;
@@ -420,53 +439,94 @@ html.is-desktop-app {
 .is-desktop-app #hub-path-body > .challenge-card > .challenge-card__track { grid-area: 2 / 2; align-self: center; margin: 0; }
 .is-desktop-app #hub-path-body > .challenge-card > .challenge-card__count { grid-area: 3 / 2; text-align: right; }
 
-/* The ladder takes the full width and the whole remaining height. */
-.is-desktop-app .ladder-list {
+/* The live-checkout banner occupies the same strip cell as the challenge card
+   it replaces — only ever one of the two is rendered. */
+.is-desktop-app #hub-path-body > .checkout-live {
+    grid-area: 1 / 2;
+    justify-content: center;
+    margin: 0;
+    padding: 14px 18px;
+}
+
+/* THE TIERS ARE THREE COLUMNS, and the previous full-width single-row ladder
+   is gone with the five-rung model that justified it.
+
+   Nine sections cannot be nine rows here. At 1280x800 the ladder area is about
+   560px, which is 53px a row once gaps are taken — not enough for a meter, a
+   status and a button, and nowhere near enough for the tagline. Three columns
+   of two to four cards give each card ~130px AND make the tier structure
+   visible, which is the whole argument for splitting the sections in the
+   first place: you can see which chart you have been avoiding. */
+.is-desktop-app .ladder-tiers {
     grid-area: 2 / 1 / 3 / 3;
     display: grid;
-    /* The stages DIVIDE the space rather than stacking to whatever height they
-       want. Add a sixth stage and every row gets shorter; nothing overflows
-       and nothing needs a scrollbar. */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    min-height: 0;
+}
+.is-desktop-app .ladder-tier {
+    min-height: 0;
+    padding: 12px 13px;
+    background: var(--surface-1);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-lg);
+    gap: 8px;
+}
+.is-desktop-app .ladder-tier__title { font-size: 0.82em; }
+.is-desktop-app .ladder-tier__blurb { font-size: 0.72em; line-height: 1.35; }
+/* The cards DIVIDE the column rather than stacking to whatever height they
+   want. Add a tenth section and every card in that tier gets shorter; nothing
+   overflows and nothing needs a scrollbar. */
+.is-desktop-app .ladder-tier__list {
+    display: grid;
     grid-auto-rows: minmax(0, 1fr);
     gap: 10px;
     min-height: 0;
+    flex: 1 1 auto;
 }
-/* At 1000px wide a stage is a ROW, not a card: what it is on the left, how far
-   along on the right. Stacking the meter under the head there gives a progress
-   bar a yard long with its own label orphaned beneath it. */
+/* A card inside a column is a CARD, not the wide four-zone row the old
+   full-width ladder used — at ~330px there is no room to put the meter beside
+   the title.
+
+   THREE ROWS, and the third one carries two things. A first pass stacked head,
+   meter, reason and actions as four flex rows; the Basic Strategy tier has
+   four cards and they overflowed their column by 13-28px each. The reason line
+   and the buttons are both short and neither needs a row to itself, so they
+   share the last one — which is ~30px a card, and four cards' worth of that is
+   the whole shortfall. Rows and columns are both named explicitly because the
+   children are conditional: `reason` and the checkout button each render only
+   in some states, and auto-placement with a moving child count is how an item
+   silently lands in a row of its own. */
 .is-desktop-app .ladder-stage {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) minmax(300px, 0.85fr) auto;
-    align-items: center;
-    column-gap: 22px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    align-content: space-between;
+    gap: 6px 10px;
     min-height: 0;
     overflow: hidden;
-    padding: 12px 20px;
+    padding: 10px 13px;
 }
-/* display:contents flattens the head's three children into the row's own grid,
-   so the status pill can sit at the far RIGHT of the row instead of at the
-   right edge of the head — where it was stranded mid-row with empty space on
-   both sides. Four zones: what it is, what it says, how far along, where it
-   stands. */
-.is-desktop-app .ladder-stage__head { display: contents; }
-/* EVERY zone names its ROW as well as its column. The meter comes after the
-   pill in the DOM, so with only a column named, auto-placement finds the
-   cursor already past column 3 in row 1 and opens a second row for it — the
-   progress bar then sits half a row below the title it belongs to, which
-   looks like a vertical-centring bug and is not one. */
-.is-desktop-app .ladder-stage__icon   { grid-area: 1 / 1; }
-.is-desktop-app .ladder-stage__titles { grid-area: 1 / 2; }
-.is-desktop-app .ladder-stage .ladder-meter { grid-area: 1 / 3; gap: 7px; }
-.is-desktop-app .ladder-stage__pill   { grid-area: 1 / 4; justify-self: end; }
-/* A 120px row filled by a 30px icon and two small lines reads as a layout
-   that ran out of content. The row is this size because five stages divide
-   the screen, so the CONTENT grows to match rather than floating in it. */
-.is-desktop-app .ladder-stage__icon { width: 44px; height: 44px; flex: 0 0 44px; font-size: 1.15em; }
-.is-desktop-app .ladder-stage__title { font-size: 1.14em; }
-.is-desktop-app .ladder-stage__tagline { font-size: 0.82em; }
-.is-desktop-app .ladder-stage__pill { font-size: 0.64em; padding: 0.35em 0.8em; }
-.is-desktop-app .ladder-stage .ladder-meter__track { height: 9px; }
-.is-desktop-app .ladder-meter__label { font-size: 0.76em; }
+/* The footer buttons are the last 4px of the budget. At the shared 0.45em
+   padding a card came to exactly its row height with nothing to spare, which
+   is not a layout, it is a coincidence waiting to break on the next string. */
+.is-desktop-app .ladder-stage__btn { font-size: 0.7em; padding: 0.3em 0.75em; }
+.is-desktop-app .ladder-stage__head {
+    grid-area: 1 / 1 / 2 / 3;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.is-desktop-app .ladder-stage .ladder-meter { grid-area: 2 / 1 / 3 / 3; gap: 4px; }
+.is-desktop-app .ladder-stage__reason { grid-area: 3 / 1; align-self: center; }
+.is-desktop-app .ladder-stage__actions { grid-area: 3 / 2; justify-self: end; }
+.is-desktop-app .ladder-stage__icon { width: 30px; height: 30px; flex: 0 0 30px; font-size: 0.88em; }
+.is-desktop-app .ladder-stage__title { font-size: 0.98em; }
+.is-desktop-app .ladder-stage__tagline { font-size: 0.74em; }
+.is-desktop-app .ladder-stage__pill { font-size: 0.58em; padding: 0.3em 0.7em; flex: 0 0 auto; }
+.is-desktop-app .ladder-stage .ladder-meter__track { height: 7px; }
+.is-desktop-app .ladder-meter__label { font-size: 0.7em; }
+.is-desktop-app .ladder-stage__reason { font-size: 0.68em; line-height: 1.35; }
 
 /* =========================================
    7. PRACTICE — modes on the left, their configuration on the right
@@ -511,6 +571,12 @@ html.is-desktop-app {
     flex: 0 0 auto;
     overflow: visible;
 }
+/* The Counting row holds FIVE tiles since the Deck Countdown drill landed, and
+   at four columns the fifth opened a second 148px row that pushed the whole
+   column 47px past the panel. Five columns keeps it one row — which is also
+   what it should look like, since these are five drills of one kind rather
+   than a grid that happens to wrap. */
+.is-desktop-app .tile-grid--short { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .is-desktop-app .tile { min-height: 0; padding: 12px 13px; border-radius: var(--r-lg); }
 .is-desktop-app .tile__glyph { font-size: 1.2em; }
 .is-desktop-app .tile__name,
@@ -538,8 +604,23 @@ html.is-desktop-app {
    8. CHARTS — the tables finally get the room they were designed for
    ========================================= */
 .is-desktop-app .chart-view { height: 100%; min-height: 0; }
-.is-desktop-app .chart-tabs { flex: 0 0 auto; }
-.is-desktop-app .chart-tab { border-radius: var(--r-sm); font-size: 0.78em; }
+/* The switcher sizes to its labels instead of spanning the window. `flex: 1`
+   on a tab was written when there were five of them on a 375px screen, where
+   dividing the width is exactly right. There are two now, on a screen three
+   times as wide, and the same rule turns each into a 380px slab — a control
+   that looks like a section header and reads as though something failed to
+   load beside it. */
+.is-desktop-app .chart-tabs {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    border-radius: var(--r-sm);
+}
+.is-desktop-app .chart-tab {
+    flex: 0 0 auto;
+    border-radius: 3px;
+    font-size: 0.78em;
+    padding: 0.5em 1.4em;
+}
 .is-desktop-app .chart-panels { min-height: 0; }
 .is-desktop-app .chart-panel.active { min-height: 0; gap: 12px; }
 
@@ -555,13 +636,54 @@ html.is-desktop-app {
 .is-desktop-app .chart-panel .reference-table th,
 .is-desktop-app .chart-panel .reference-table td { padding: 0; }
 
-/* Two blocks, side by side — on the phone they are a scroll. */
+/* THE THREE BASIC-STRATEGY CHARTS ARE THREE COLUMNS, not three tabs.
+   Comparing cells across the charts is most of what looking one up is for,
+   and behind a switcher that was two clicks and a memory test.
+
+   At 1280 the panel is ~1020px wide, so a column is ~330px: eleven table
+   columns at ~30px each, which is ample for a one-character cell. Neither
+   axis scrolls — the tables are height-distributed into whatever the grid
+   row gives them, exactly as they were when each had a panel to itself. */
+.is-desktop-app .chart-triptych {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    overflow: hidden;
+}
+.is-desktop-app .chart-advanced {
+    display: grid;
+    /* The deviations table is the reason to be on this screen; the rules and
+       Hi-Lo tags are reference you glance at. Weighted, not halved. */
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 24px;
+    overflow: hidden;
+}
+.is-desktop-app .chart-triptych__title { font-size: 0.76em; }
+/* Each chart has a column to itself here, so the height-distributing behaviour
+   the base rule was written for is correct again — and has to be put back,
+   because the phone fix above turns it off for both layouts. */
+.is-desktop-app .chart-triptych__col { flex: 1 1 auto; min-height: 0; }
+.is-desktop-app .chart-triptych .reference-table,
+.is-desktop-app .chart-advanced .reference-table { flex: 1 1 auto; height: 100%; min-height: 0; }
+/* The phone's fixed row height must not survive here, or eleven 30px rows
+   would sit in a 600px column with the rest of it empty. */
+.is-desktop-app .chart-triptych .reference-table th,
+.is-desktop-app .chart-triptych .reference-table td,
+.is-desktop-app .chart-advanced .reference-table th,
+.is-desktop-app .chart-advanced .reference-table td { height: auto; }
+
+/* Two blocks, side by side — on the phone they are a scroll. Inside the
+   advanced panel the rules column is already narrow, so they stack there. */
 .is-desktop-app .chart-rules {
     overflow: hidden;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
     gap: 28px;
+}
+.is-desktop-app .chart-advanced .chart-rules {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
 }
 .is-desktop-app .chart-rules__block li { font-size: 0.86em; }
 
@@ -658,11 +780,24 @@ html.is-desktop-app {
     min-height: 0;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    /* Same argument as the ladder: the catalog divides the card. A fifteenth
-       achievement makes every tile shorter, it does not make a scrollbar. */
-    grid-auto-rows: minmax(0, 1fr);
+    /* THIS USED TO DIVIDE THE CARD and must not any more. The old note here
+       said "a fifteenth achievement makes every tile shorter, it does not make
+       a scrollbar" — true while the catalog was fourteen, and false the moment
+       it became thirty-one. Eight rows dividing the card give each tile ~70px
+       against ~66px of title and description, so every one of them overflowed
+       by a few pixels: not a visible break, just thirty-one quietly clipped
+       cards. A dividing grid is only honest while the thing it divides is
+       bounded, and an achievement catalog is not — it grows every time the
+       ladder does.
+       So it becomes a designated scroll well (§11) with a real row height,
+       for the same reason the mistake log is one. */
+    grid-auto-rows: 92px;
     gap: 9px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
 }
+.is-desktop-app [data-section="achievements"] .achv-grid::-webkit-scrollbar { width: 0; height: 0; }
 /* Centred, because the row height is now decided by the grid rather than by
    the card: top-aligned content in a 150px row leaves every tile bottom-heavy
    with nothing. */
@@ -686,7 +821,7 @@ html.is-desktop-app {
 
 /* =========================================
    11. DESIGNATED SCROLL WELLS
-   The four places whose content is genuinely unbounded. Each is a bounded
+   The six places whose content is genuinely unbounded. Each is a bounded
    card, fully visible, that scrolls INSIDE itself with no visible scrollbar.
    Nothing else in the app may scroll.
 
@@ -699,6 +834,10 @@ html.is-desktop-app {
 .is-desktop-app .stats-mistake-list,
 .is-desktop-app .heatmap-wrap,
 .is-desktop-app [data-section="accuracy"] .bar-chart,
+/* A ledger has no maximum length, exactly like the mistake log. Nor does the
+   achievement catalog, which is why it stopped dividing its card — see §10. */
+.is-desktop-app .edge-sessions,
+.is-desktop-app [data-section="achievements"] .achv-grid,
 .is-desktop-app #reference-modal-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -710,6 +849,7 @@ html.is-desktop-app {
 .is-desktop-app .stats-mistake-list::-webkit-scrollbar,
 .is-desktop-app .heatmap-wrap::-webkit-scrollbar,
 .is-desktop-app [data-section="accuracy"] .bar-chart::-webkit-scrollbar,
+.is-desktop-app .edge-sessions::-webkit-scrollbar,
 .is-desktop-app #reference-modal-body::-webkit-scrollbar { width: 0; height: 0; }
 
 /* =========================================
@@ -774,11 +914,33 @@ html.is-desktop-app {
     border-right: 1px solid var(--hairline);
     border-radius: var(--r-xl) var(--r-xl) 0 0;
 }
+/* THE CARD'S TEXT SCALES WITH THE CARD. Everything on a card face is sized in
+   `em` — .card-top and .card-bottom at 1.05em, the pip at 2.9em — but a card
+   inherits its font-size from the body, so those ems resolved against 15px no
+   matter how large the card got. Growing --card-w alone therefore bought more
+   white space and a rank exactly as small as it was before, which is most of
+   why the cards read as unusable at a desk: the DATA never grew.
+
+   Scoped to desktop and expressed as a ratio of the card's own width, so it
+   stays right at every size the app uses — including the table-sim spot
+   counts, which shrink --card-w down to 42px for seven spots and whose text
+   should shrink with them. A `max()` floor would have broken exactly that
+   case. Phone sizing is untouched. */
+.is-desktop-app .playing-card { font-size: calc(var(--card-w) * 0.185); }
+
 /* The hands were pinned to the extreme top and bottom of an 800px window with
-   a third of the felt empty between them. Padding pulls them toward the middle
-   third, where a real table's action actually sits. */
-.is-desktop-app .zone--dealer { padding-top: 40px; }
-.is-desktop-app .zone--player { padding-bottom: 18px; }
+   a third of the felt empty between them. The first pass added a little
+   padding; it was not nearly enough. At 1280x800 the dealer's cards ended
+   around y=200 and the player's began around y=460 — 258px of empty felt
+   between the two things you are comparing, which is what makes reading a
+   hand a head movement instead of a glance.
+
+   These numbers are measured against that budget rather than nudged: the felt
+   is ~640px after the topbar and the dashboard, a hand column is the card
+   plus its score badge (~204px at this card size), and these paddings leave
+   roughly 80px between the two hands — close enough to take in together. */
+.is-desktop-app .zone--dealer { padding-top: 88px; }
+.is-desktop-app .zone--player { padding-bottom: 56px; }
 
 /* The discard tray rides just outside the table, not in the far corner of the
    window — at 1280px wide it was 440px from anything it relates to, which is
@@ -787,6 +949,16 @@ html.is-desktop-app {
 
 .is-desktop-app .felt-text h2 { font-family: var(--font-display); letter-spacing: 3px; font-size: 1.15em; }
 .is-desktop-app .felt-text p { letter-spacing: 1px; }
+
+/* The felt legend moves to the TOP of the felt, above the dealer's hand.
+   It sits at 40% by default, which is where a real table prints it — in the
+   arc between the dealer and the betting circles — and that was fine while
+   the two hands were pinned to the extreme edges of the window with a third
+   of the felt empty between them. Closing that gap (see the zone padding
+   above) is the whole point of this pass, and it put the dealer's cards
+   straight through the lettering. The clear band the dealer's padding opens
+   at the top is now the only place on the felt with room for it. */
+.is-desktop-app .felt-text { top: 46px; transform: translate(-50%, 0); }
 
 /* =========================================
    13. COUNT DRILLS, OVERLAYS, TOASTS
@@ -818,3 +990,60 @@ html.is-desktop-app {
     box-shadow: var(--elev-3);
     border-color: var(--gold-line);
 }
+
+/* =========================================
+   14. THE EDGE — bankroll ledger + EV calculator
+   Both views are BOARDS, not scrolls: the whole point of the screen is seeing
+   the spread, the risk and the result at once, and a panel you have to scroll
+   to compare two halves of is the phone layout again. The only thing that
+   scrolls is the session list, which is a designated well (§11) for the same
+   reason the mistake log is one — a ledger has no maximum length.
+   ========================================= */
+.is-desktop-app .edge-body { overflow: hidden; }
+
+.is-desktop-app .edge-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    flex: 0 0 auto;
+}
+.is-desktop-app .edge-stat__value { font-size: 1.6em; }
+
+.is-desktop-app .edge-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+    gap: 16px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+.is-desktop-app .edge-col { gap: 14px; overflow: hidden; }
+/* The ramp is the tall one — it has eleven rows where the rules panel has
+   six — so it takes the leftover height rather than dividing evenly with the
+   summary beneath it. */
+.is-desktop-app .edge-panel--ramp { flex: 1 1 auto; min-height: 0; }
+.is-desktop-app .edge-ramp { font-size: 0.82em; }
+
+/* --- bankroll view: chart and tiles on top, ledger and form beneath --- */
+.is-desktop-app .edge-bank-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 16px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.is-desktop-app .edge-panel--chart { min-height: 0; overflow: hidden; }
+.is-desktop-app .edge-stats--bank {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: minmax(0, 1fr);
+    gap: 10px;
+}
+.is-desktop-app .edge-bank-bottom {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 16px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.is-desktop-app .edge-panel--list,
+.is-desktop-app .edge-panel--form { min-height: 0; overflow: hidden; }
+.is-desktop-app .edge-form { grid-template-columns: repeat(4, minmax(0, 1fr)); }
